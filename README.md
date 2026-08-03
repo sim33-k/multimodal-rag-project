@@ -29,10 +29,6 @@ handed to Gemini to write the final answer.
 Because everything goes through the API, the whole pipeline can also be tested
 directly through the Swagger docs at `/docs` without touching the frontend.
 
-More detail in [docs/](docs/): [architecture](docs/ARCHITECTURE.md),
-[database design](docs/DATABASE.md), [embeddings](docs/EMBEDDINGS.md),
-[API reference](docs/API.md), [evaluation](docs/EVALUATION.md).
-
 ## Prerequisites
 
 - Docker Desktop (or Docker Engine + Compose), so you don't have to install Postgres by hand.
@@ -100,8 +96,7 @@ API_BASE_URL=http://localhost:8000
 
 Note: the system still runs without a key. Query routing falls back to a keyword
 heuristic and answers get composed directly from the retrieved rows instead of
-Gemini. Retrieval itself still works fine. See
-[graceful degradation](docs/ARCHITECTURE.md#graceful-degradation).
+Gemini. Retrieval itself still works fine.
 
 A note on model names and quotas: free tier quotas are per model, and a few
 models report zero quota or are closed to new keys, which looks like a bad key
@@ -120,23 +115,11 @@ python embeddings/image_embed.py   # CLIP image embeddings
 ```
 
 Images are already committed to the repo, so a fresh clone doesn't need to
-download anything.
+download anything. Attribution for each image is in
+`data/images/IMAGE_SOURCES.md`.
 
 `init_db.py` resets the schema every time it runs, so it's safe to run again
 after editing a CSV.
-
-To add or refresh images:
-
-```bash
-python data/fetch_images.py        # skips files it already has
-python db/init_db.py               # register again
-python embeddings/image_embed.py   # embed again
-```
-
-Note: Wikimedia limits bulk downloads pretty aggressively and the script
-backs off when that happens. A single run might only fetch part of the set, just
-run it again later and it picks up where it left off. Attribution accumulates in
-`data/images/IMAGE_SOURCES.md` across runs.
 
 ### 5. Run
 
@@ -159,7 +142,6 @@ data/
   raw/                 flat CSVs, one per category
   descriptions/        prose descriptions used for text embeddings
   images/              attraction images + per file source attribution
-  fetch_images.py      rebuilds or tops up the image set from Wikimedia
 db/
   schema.sql           normalised schema, attractions_full view, tsvector column
   init_db.py           creates the schema and loads the CSVs
@@ -186,7 +168,6 @@ web/
   index.html           frontend, served by the API at /ui
   style.css            no framework, no external assets
   app.js               no libraries, calls the API over HTTP
-docs/                  architecture, database, embeddings, API, evaluation
 ```
 
 ## Data sources
@@ -196,5 +177,4 @@ Lanka Tourism Development Authority. Images come from Wikimedia Commons,
 per file attribution is written to `data/images/IMAGE_SOURCES.md` by the fetch
 script.
 
-Models and libraries used are credited in [docs/EMBEDDINGS.md](docs/EMBEDDINGS.md)
-and in the technical report.
+Models and libraries used are credited in the technical report.

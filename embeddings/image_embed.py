@@ -80,8 +80,7 @@ if __name__ == "__main__":
         """
     )
     if not rows:
-        print("No images in the database. Run python data/fetch_images.py then "
-              "python db/init_db.py first.")
+        print("No images in the database. Run python db/init_db.py first.")
     else:
         ids = []
         metadatas = []
