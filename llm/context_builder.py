@@ -1,5 +1,5 @@
-# Turns the rows we retrieved into the block of text we hand to Gemini.
-# Numbered so the answer can refer to results by position.
+# Turns the rows we got back into the block of text we give to Gemini.
+# Numbered so the answer can point at results by position.
 
 MAX_CONTEXT_ITEMS = 8
 MAX_DESCRIPTION_CHARS = 600
@@ -22,24 +22,34 @@ FIELD_LABELS = {
     "unesco_status": "UNESCO status",
 }
 
-# stuff the model shouldn't see. fusion_score and retrievers are added by the
-# hybrid route for the UI, and without them listed here they end up in the
+# things the model shouldn't see. fusion_score and retrievers get added by the
+# hybrid route for the page, and if they aren't listed here they end up in the
 # prompt looking like facts about the place
-SKIP_FIELDS = {
+SKIP_FIELDS = [
     "id", "name", "category", "latitude", "longitude", "images", "similarity",
     "score", "sources", "ranks", "fusion_score", "retrievers",
-}
+]
 
 
 def format_row(index, row, description):
-    category = row.get("category", "").replace("_", " ")
-    lines = ["[" + str(index) + "] " + row["name"] + " (" + category + ")"]
+    category = row.get("category", "")
+    category = category.replace("_", " ")
+
+    lines = []
+    lines.append("[" + str(index) + "] " + row["name"] + " (" + category + ")")
 
     for key in row:
-        value = row[key]
-        if key in SKIP_FIELDS or value is None or value == "":
+        if key in SKIP_FIELDS:
             continue
-        label = FIELD_LABELS.get(key, key.replace("_", " ").capitalize())
+        value = row[key]
+        if value is None or value == "":
+            continue
+
+        if key in FIELD_LABELS:
+            label = FIELD_LABELS[key]
+        else:
+            label = key.replace("_", " ").capitalize()
+
         lines.append("    " + label + ": " + str(value))
 
     if row.get("images"):
@@ -48,16 +58,17 @@ def format_row(index, row, description):
     if description:
         trimmed = description.strip()
         if len(trimmed) > MAX_DESCRIPTION_CHARS:
-            trimmed = trimmed[:MAX_DESCRIPTION_CHARS].rsplit(" ", 1)[0] + "..."
+            trimmed = trimmed[:MAX_DESCRIPTION_CHARS]
+            trimmed = trimmed.rsplit(" ", 1)[0] + "..."
         lines.append("    Description: " + trimmed)
 
     return "\n".join(lines)
 
 
 def build_context(rows, descriptions=None, max_items=MAX_CONTEXT_ITEMS):
-    # cut off after max_items - relevance drops fast after the top few and a
-    # long tail just makes the model pad the answer with places nobody asked
-    # about
+    # stop after max_items. the results past the top few aren't that relevant
+    # and a long list just makes the model pad the answer out with places nobody
+    # asked about
     if not rows:
         return "No matching attractions were found in the database."
 
@@ -67,15 +78,16 @@ def build_context(rows, descriptions=None, max_items=MAX_CONTEXT_ITEMS):
     blocks = []
     index = 1
     for row in rows[:max_items]:
-        blocks.append(format_row(index, row, descriptions.get(row["id"])))
-        index += 1
+        description = descriptions.get(row["id"])
+        blocks.append(format_row(index, row, description))
+        index = index + 1
 
     return "\n\n".join(blocks)
 
 
 def load_descriptions():
-    # imported in here so this module doesn't hard depend on the embeddings
-    # package just to read some json
+    # imported in here so this file doesn't depend on the embeddings package
+    # just to read some json
     from embeddings.text_embed import load_descriptions as loader
 
     return loader()

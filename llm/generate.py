@@ -1,12 +1,12 @@
-# Generates the final answer with Gemini, using only the retrieved context.
+# Writes the final answer with Gemini, using only the context we retrieved.
 #
 # The prompt tells it to stick to the context and to say when the context
-# doesn't cover the question. That's the whole point of RAG here - the answer
-# should come from rows we actually retrieved, not from whatever the model
-# happens to know about Sri Lanka.
+# doesn't answer the question. That's the whole point here - the answer should
+# come from rows we actually retrieved, not from whatever the model already
+# knows about Sri Lanka.
 #
-# If the API isn't available we build a plain answer from the rows instead, so
-# the pipeline can still be demoed without a working key.
+# If the API isn't working we put an answer together from the rows ourselves so
+# the rest of the pipeline can still be demoed.
 
 import os
 
@@ -32,34 +32,40 @@ Question: {query}"""
 
 
 def get_model_names():
-    # try the good model first, then the lite one. the good one only allows
-    # about 20 requests a day on the free tier, so once that's gone the answers
-    # get a bit plainer instead of disappearing completely
-    return [
-        os.getenv("GEMINI_MODEL", "gemini-flash-latest"),
-        os.getenv("GEMINI_FALLBACK_MODEL", "gemini-flash-lite-latest"),
-    ]
+    # try the good model first then the lite one. the good one only allows about
+    # 20 requests a day on the free tier, so once that runs out the answers get
+    # a bit plainer instead of disappearing
+    models = []
+    models.append(os.getenv("GEMINI_MODEL", "gemini-flash-latest"))
+    models.append(os.getenv("GEMINI_FALLBACK_MODEL", "gemini-flash-lite-latest"))
+    return models
 
 
 def get_api_key():
-    key = os.getenv("GEMINI_API_KEY", "").strip()
+    key = os.getenv("GEMINI_API_KEY", "")
+    key = key.strip()
     if key == "your_key_here":
         return ""
     return key
 
 
 def is_configured():
-    return bool(get_api_key())
+    if get_api_key() == "":
+        return False
+    return True
 
 
 def fallback_answer(query, rows):
-    # no LLM - just describe what we retrieved. says so at the end so it's
-    # obvious this isn't the generated version
+    # no LLM, so just describe what we found. it says so at the bottom to make
+    # it obvious this isn't the generated version
     if not rows:
         return ("No attractions in the database matched that query. Try broadening "
                 "the filters, or rephrasing the question.")
 
-    names = [row["name"] for row in rows[:5]]
+    names = []
+    for row in rows[:5]:
+        names.append(row["name"])
+
     if len(names) == 1:
         lead = 'The closest match for "' + query + '" is ' + names[0] + "."
     else:
@@ -68,7 +74,8 @@ def fallback_answer(query, rows):
 
     details = []
     for row in rows[:3]:
-        parts = [row["name"] + " is in " + row.get("district", "Sri Lanka")]
+        parts = []
+        parts.append(row["name"] + " is in " + row.get("district", "Sri Lanka"))
         if row.get("best_season"):
             parts.append("best visited " + row["best_season"])
         if row.get("entrance_fee"):
@@ -102,13 +109,17 @@ def generate_answer(query, context, rows=None):
                 prompt,
                 generation_config={"temperature": 0.4, "max_output_tokens": 800},
             )
-            text = (response.text or "").strip()
-            if not text:
+            text = response.text
+            if text is None:
+                text = ""
+            text = text.strip()
+            if text == "":
                 raise ValueError("empty response")
             return {"answer": text, "source": "gemini", "model": model_name}
         except Exception as error:
-            # usually a 429 once the daily allowance is used up, so try the
-            # next model before giving up on the LLM entirely
-            print("[generate] " + model_name + " not available (" + str(error)[:120] + ")")
+            # normally a 429 once the daily allowance is gone, so try the next
+            # model before giving up on the LLM completely
+            print("[generate] " + model_name + " not available (" +
+                  str(error)[:120] + ")")
 
     return {"answer": fallback_answer(query, rows), "source": "fallback"}

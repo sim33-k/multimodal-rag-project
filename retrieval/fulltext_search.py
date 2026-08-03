@@ -2,22 +2,20 @@
 #
 # This is here to balance out the embedding search. Embeddings are good at
 # meaning but they blur place names together - searching "Yapahuwa" with
-# embeddings also brings back Hikkaduwa and Yala. A tsvector match doesn't have
-# that problem, which is why we run both and fuse the results.
+# embeddings also brings back Hikkaduwa and Yala. A tsvector match doesn't do
+# that, which is why we run both and fuse the results together.
 
 from db.connection import fetch_all
 from retrieval.sql_query import attach_images, clean_row
 
 
 def run_query(query_function, query, limit):
-    return fetch_all(
-        "SELECT a.id, ts_rank(a.search_vector, " + query_function +
-        "('english', :query)) AS rank "
-        "FROM attractions a "
-        "WHERE a.search_vector @@ " + query_function + "('english', :query) "
-        "ORDER BY rank DESC LIMIT :limit",
-        {"query": query, "limit": limit},
-    )
+    sql = ("SELECT a.id, ts_rank(a.search_vector, " + query_function +
+           "('english', :query)) AS rank "
+           "FROM attractions a "
+           "WHERE a.search_vector @@ " + query_function + "('english', :query) "
+           "ORDER BY rank DESC LIMIT :limit")
+    return fetch_all(sql, {"query": query, "limit": limit})
 
 
 def search_ids(query, limit=10):
@@ -27,21 +25,25 @@ def search_ids(query, limit=10):
     if query == "":
         return []
 
-    # websearch_to_tsquery needs every word to match, which is right for
-    # something like "Sigiriya" but gives nothing for a sentence like
-    # "old rock fortress near Matale". So if that finds nothing, retry with the
-    # words OR'd together and let ts_rank sort them.
+    # websearch_to_tsquery needs every word to be there. that is what we want
+    # for something like "Sigiriya", but it finds nothing for a full sentence
+    # like "old rock fortress near Matale".
     rows = run_query("websearch_to_tsquery", query, limit)
 
-    if not rows:
+    if len(rows) == 0:
+        # so try again with the words OR'd together and let ts_rank order them
+        words = query.replace(",", " ").split()
         terms = []
-        for term in query.replace(",", " ").split():
-            if len(term) > 2:
-                terms.append(term)
-        if terms:
+        for word in words:
+            if len(word) > 2:
+                terms.append(word)
+        if len(terms) > 0:
             rows = run_query("to_tsquery", " | ".join(terms), limit)
 
-    return [row["id"] for row in rows]
+    ids = []
+    for row in rows:
+        ids.append(row["id"])
+    return ids
 
 
 def search(query, limit=10):

@@ -1,11 +1,11 @@
 # Structured search - filtered SQL against the attractions_full view.
-# Always uses bound parameters, never string formatting, so nothing coming from
-# the LLM router can mess with the query.
+# The values always go in as bound parameters, never pasted into the string, so
+# anything coming back from the LLM router can't change the query.
 
 from db.connection import fetch_all
 
-# The columns that only apply to one category. The view LEFT JOINs everything so
-# a beach row comes back with NULL height_m etc, and we strip those out below.
+# columns that only belong to one category. the view LEFT JOINs all of them so a
+# beach row comes back with height_m = None etc, and we take those out below
 CATEGORY_DETAIL_COLUMNS = {
     "beach": ["activity_type", "water_quality", "surf_break"],
     "mountain": ["height_m", "trekking_difficulty", "duration_hours"],
@@ -33,9 +33,16 @@ CORE_FIELDS = [
 
 
 def clean_row(row):
-    # drop the other categories' columns, then drop anything that's None
-    keep = set(CORE_FIELDS)
-    keep.update(CATEGORY_DETAIL_COLUMNS.get(row.get("category"), []))
+    # keep the shared columns plus the ones for this row's category, and throw
+    # away anything that is None
+    category = row.get("category")
+
+    keep = []
+    for field in CORE_FIELDS:
+        keep.append(field)
+    if category in CATEGORY_DETAIL_COLUMNS:
+        for field in CATEGORY_DETAIL_COLUMNS[category]:
+            keep.append(field)
 
     cleaned = {}
     for key in row:
@@ -45,11 +52,14 @@ def clean_row(row):
 
 
 def attach_images(rows):
-    # one query for all of them instead of one per row
+    # one query for all the rows instead of one query per row
     if not rows:
         return rows
 
-    ids = [row["id"] for row in rows]
+    ids = []
+    for row in rows:
+        ids.append(row["id"])
+
     images = fetch_all(
         "SELECT attraction_id, file_path, caption FROM images "
         "WHERE attraction_id = ANY(:ids) ORDER BY image_id",
@@ -67,7 +77,10 @@ def attach_images(rows):
         })
 
     for row in rows:
-        row["images"] = grouped.get(row["id"], [])
+        if row["id"] in grouped:
+            row["images"] = grouped[row["id"]]
+        else:
+            row["images"] = []
     return rows
 
 
@@ -75,16 +88,17 @@ def structured_search(category=None, district=None, accessibility=None,
                       best_season=None, keyword=None, max_height_m=None,
                       min_height_m=None, unesco_only=False, surf_break=None,
                       free_entry=False, limit=10):
-    # only the filters that were actually passed get added to the WHERE, so
-    # calling this with nothing gives you a general listing
+    # only the filters that were actually given get a WHERE clause, so calling
+    # this with nothing gives a general listing instead of nothing at all
     clauses = []
-    params = {"limit": limit}
+    params = {}
+    params["limit"] = limit
 
     if category:
         clauses.append("category = :category")
         params["category"] = category
     if district:
-        # some districts are stored as "Southern/Uva" so match on contains
+        # a few districts are stored like "Southern/Uva" so match on contains
         clauses.append("district ILIKE :district")
         params["district"] = "%" + district + "%"
     if accessibility:
@@ -111,19 +125,21 @@ def structured_search(category=None, district=None, accessibility=None,
         clauses.append("entrance_fee ILIKE 'free%'")
 
     where = ""
-    if clauses:
+    if len(clauses) > 0:
         where = "WHERE " + " AND ".join(clauses)
 
-    rows = fetch_all(
-        "SELECT * FROM attractions_full " + where + " ORDER BY name LIMIT :limit",
-        params,
-    )
-    return attach_images([clean_row(r) for r in rows])
+    sql = "SELECT * FROM attractions_full " + where + " ORDER BY name LIMIT :limit"
+    rows = fetch_all(sql, params)
+
+    cleaned = []
+    for row in rows:
+        cleaned.append(clean_row(row))
+    return attach_images(cleaned)
 
 
 def get_by_ids(ids):
-    # used to turn the ids from the vector searches back into full rows,
-    # keeping the order they came in
+    # turns the ids from the vector searches back into full rows, keeping the
+    # order they came in
     if not ids:
         return []
 
@@ -142,13 +158,18 @@ def get_by_ids(ids):
 
 
 def filter_options():
-    # for the dropdowns in the UI, read from the data so they can't go stale
+    # for the dropdowns. read from the data so they can't go out of date
     districts = fetch_all(
         "SELECT DISTINCT district FROM attractions "
         "WHERE district IS NOT NULL ORDER BY district"
     )
+
+    names = []
+    for row in districts:
+        names.append(row["district"])
+
     return {
         "categories": ["beach", "mountain", "national_park", "historical_site"],
-        "districts": [r["district"] for r in districts],
+        "districts": names,
         "accessibility": ["easy", "moderate", "difficult"],
     }

@@ -1,5 +1,5 @@
-# Database connection. Everything that needs the DB imports from here so we
-# only build the engine once.
+# Database connection. Everything that needs the DB imports from here so we only
+# build the engine once.
 
 import os
 from pathlib import Path
@@ -16,8 +16,8 @@ DATABASE_URL = os.getenv(
     "postgresql://sltourism_user:devpassword@localhost:5432/sltourism",
 )
 
-# pool_pre_ping stops us getting a dead connection after the docker container
-# gets restarted, which happened a lot while developing
+# pool_pre_ping stops us getting handed a dead connection after the docker
+# container gets restarted, which happened a lot while building this
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
 
 
@@ -26,21 +26,28 @@ def get_engine():
 
 
 def fetch_all(sql, params=None):
-    # returns rows as normal dicts so the rest of the code doesn't have to deal
-    # with sqlalchemy Row objects
-    with engine.connect() as conn:
-        result = conn.execute(text(sql), params or {})
+    # gives back normal dicts so the rest of the code doesn't have to deal with
+    # sqlalchemy Row objects
+    if params is None:
+        params = {}
+
+    conn = engine.connect()
+    try:
+        result = conn.execute(text(sql), params)
         rows = []
         for row in result.mappings():
             rows.append(dict(row))
         return rows
+    finally:
+        conn.close()
 
 
 def ping():
     # used by /health
     try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
+        conn = engine.connect()
+        conn.execute(text("SELECT 1"))
+        conn.close()
         return True
     except Exception:
         return False

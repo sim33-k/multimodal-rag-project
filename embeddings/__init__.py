@@ -1,5 +1,5 @@
 # ChromaDB setup. Both embedding scripts need the same client pointing at the
-# same folder so it's created here instead of in each one.
+# same folder, so it gets made here instead of in each of them.
 
 from pathlib import Path
 
@@ -27,19 +27,22 @@ def get_chroma_client():
 
 
 def get_collection(name):
-    # cosine, not the default L2 - our vectors are normalised so only the
+    # cosine, not the default L2. our vectors are all normalised so only the
     # direction means anything
-    return get_chroma_client().get_or_create_collection(
+    c = get_chroma_client()
+    return c.get_or_create_collection(
         name=name,
         metadata={"hnsw:space": "cosine"},
     )
 
 
 def reset_collection(name):
-    # delete and recreate, otherwise old vectors hang around after a re-import
+    # delete then recreate, otherwise the old vectors are still in there after
+    # a re-import
     c = get_chroma_client()
     try:
         c.delete_collection(name)
     except Exception:
-        pass  # first run, nothing to delete
+        # first run, there is nothing to delete
+        pass
     return get_collection(name)
