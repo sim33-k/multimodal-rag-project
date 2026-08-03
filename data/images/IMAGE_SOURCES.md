@@ -2,7 +2,7 @@
 
 All images were retrieved from Wikimedia Commons through the Wikipedia API.
 Each file carries its own licence, shown on the linked file page.
-Regenerate this list with `python -m data.fetch_images`.
+Regenerate this list with `python data/fetch_images.py`.
 
 | Attraction | Wikipedia article | File |
 |---|---|---|

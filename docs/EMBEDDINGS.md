@@ -96,8 +96,9 @@ internally, so storing full resolution would buy nothing.
 
 `transformers` 4.x returns a bare tensor from `get_image_features`; 5.x returns a
 `BaseModelOutputWithPooling` whose `pooler_output` holds the projected embedding.
-`embeddings/image_embed.py:_as_tensor()` handles both, so the pipeline works
-regardless of which version is installed.
+`embeddings/image_embed.py` checks the output type inline in `embed_images()`
+and `embed_text()` to handle both, so the pipeline works regardless of which
+version is installed.
 
 ## Rebuilding
 
@@ -105,12 +106,12 @@ Both scripts drop and recreate their collection on every run, so a re-ingest nev
 leaves stale vectors from deleted or renamed attractions.
 
 ```bash
-python -m embeddings.text_embed     # after editing descriptions or CSVs
-python -m embeddings.image_embed    # after adding or replacing images
+python embeddings/text_embed.py     # after editing descriptions or CSVs
+python embeddings/image_embed.py    # after adding or replacing images
 ```
 
 `image_embed` reads the `images` table, so new image files must be registered by
-`db.init_db` first.
+`db/init_db.py` first.
 
 ## Query-time encoding
 

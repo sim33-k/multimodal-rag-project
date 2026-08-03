@@ -4,9 +4,14 @@
 # tab can do both things: upload a photo and find similar photos, or type
 # "golden sand" and match against the photos directly.
 #
-# Run:  python -m embeddings.image_embed
+# Run:  python embeddings/image_embed.py
 
 import sys
+from pathlib import Path
+
+# db and embeddings aren't installed as packages, so add the project root to
+# the path by hand
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import torch
 from PIL import Image
@@ -22,37 +27,29 @@ model = None
 processor = None
 
 
-def get_model():
-    # first run downloads about 600MB
+def embed_images(images):
     global model, processor
     if model is None:
+        # first run downloads about 600MB
         model = CLIPModel.from_pretrained(MODEL_NAME)
         model.eval()
         processor = CLIPProcessor.from_pretrained(MODEL_NAME)
-    return model, processor
 
-
-def as_tensor(output):
-    # transformers 4.x gives back a plain tensor here but 5.x gives an object
-    # with the tensor in .pooler_output, so handle both
-    if isinstance(output, torch.Tensor):
-        return output
-    if getattr(output, "pooler_output", None) is not None:
-        return output.pooler_output
-    raise TypeError("Unexpected CLIP output: " + type(output).__name__)
-
-
-def normalise(features):
-    # make them unit length so cosine distance works properly
-    return features / features.norm(dim=-1, keepdim=True)
-
-
-def embed_images(images):
-    m, p = get_model()
-    inputs = p(images=images, return_tensors="pt")
+    inputs = processor(images=images, return_tensors="pt")
     with torch.no_grad():
-        features = as_tensor(m.get_image_features(**inputs))
-    return normalise(features).tolist()
+        output = model.get_image_features(**inputs)
+        # transformers 4.x gives back a plain tensor here but 5.x gives an
+        # object with the tensor in .pooler_output, so handle both
+        if isinstance(output, torch.Tensor):
+            features = output
+        elif getattr(output, "pooler_output", None) is not None:
+            features = output.pooler_output
+        else:
+            raise TypeError("Unexpected CLIP output: " + type(output).__name__)
+
+    # make them unit length so cosine distance works properly
+    features = features / features.norm(dim=-1, keepdim=True)
+    return features.tolist()
 
 
 def embed_image(image):
@@ -62,14 +59,27 @@ def embed_image(image):
 def embed_text(text):
     # NOTE: this is CLIP's text encoder, not MiniLM. Different vector space,
     # never compare the two.
-    m, p = get_model()
-    inputs = p(text=[text], return_tensors="pt", padding=True, truncation=True)
+    global model, processor
+    if model is None:
+        model = CLIPModel.from_pretrained(MODEL_NAME)
+        model.eval()
+        processor = CLIPProcessor.from_pretrained(MODEL_NAME)
+
+    inputs = processor(text=[text], return_tensors="pt", padding=True, truncation=True)
     with torch.no_grad():
-        features = as_tensor(m.get_text_features(**inputs))
-    return normalise(features)[0].tolist()
+        output = model.get_text_features(**inputs)
+        if isinstance(output, torch.Tensor):
+            features = output
+        elif getattr(output, "pooler_output", None) is not None:
+            features = output.pooler_output
+        else:
+            raise TypeError("Unexpected CLIP output: " + type(output).__name__)
+
+    features = features / features.norm(dim=-1, keepdim=True)
+    return features[0].tolist()
 
 
-def main():
+if __name__ == "__main__":
     rows = fetch_all(
         """
         SELECT i.image_id, i.file_path, i.caption,
@@ -80,60 +90,54 @@ def main():
         """
     )
     if not rows:
-        print("No images in the database. Run python -m data.fetch_images then "
-              "python -m db.init_db first.")
-        return
+        print("No images in the database. Run python data/fetch_images.py then "
+              "python db/init_db.py first.")
+    else:
+        ids = []
+        metadatas = []
+        loaded = []
+        missing = []
 
-    ids = []
-    metadatas = []
-    loaded = []
-    missing = []
+        for row in rows:
+            path = PROJECT_ROOT / row["file_path"]
+            if not path.exists():
+                missing.append(row["file_path"])
+                continue
+            loaded.append(Image.open(path).convert("RGB"))
+            # id is the image id not the attraction id, because one attraction
+            # can have more than one photo. attraction_id goes in the metadata
+            # so we can group them back together when searching.
+            ids.append("img_" + str(row["image_id"]))
+            metadatas.append({
+                "attraction_id": row["attraction_id"],
+                "name": row["name"],
+                "category": row["category"],
+                "district": row["district"] or "",
+                "file_path": row["file_path"],
+                "caption": row["caption"] or "",
+            })
 
-    for row in rows:
-        path = PROJECT_ROOT / row["file_path"]
-        if not path.exists():
-            missing.append(row["file_path"])
-            continue
-        loaded.append(Image.open(path).convert("RGB"))
-        # id is the image id not the attraction id, because one attraction can
-        # have more than one photo. attraction_id goes in the metadata so we can
-        # group them back together when searching.
-        ids.append("img_" + str(row["image_id"]))
-        metadatas.append({
-            "attraction_id": row["attraction_id"],
-            "name": row["name"],
-            "category": row["category"],
-            "district": row["district"] or "",
-            "file_path": row["file_path"],
-            "caption": row["caption"] or "",
-        })
+        if not loaded:
+            print("No image files found on disk.")
+        else:
+            print("Encoding " + str(len(loaded)) + " images with " + MODEL_NAME + "...")
 
-    if not loaded:
-        print("No image files found on disk.")
-        return
+            vectors = []
+            start = 0
+            while start < len(loaded):
+                batch = loaded[start:start + BATCH_SIZE]
+                vectors.extend(embed_images(batch))
+                start = start + BATCH_SIZE
+                print("  " + str(min(start, len(loaded))) + "/" + str(len(loaded)))
 
-    print("Encoding " + str(len(loaded)) + " images with " + MODEL_NAME + "...")
+            collection = reset_collection(IMAGE_COLLECTION)
+            collection.add(
+                ids=ids,
+                metadatas=metadatas,
+                embeddings=vectors,
+                documents=[m["name"] for m in metadatas],
+            )
 
-    vectors = []
-    start = 0
-    while start < len(loaded):
-        batch = loaded[start:start + BATCH_SIZE]
-        vectors.extend(embed_images(batch))
-        start = start + BATCH_SIZE
-        print("  " + str(min(start, len(loaded))) + "/" + str(len(loaded)))
-
-    collection = reset_collection(IMAGE_COLLECTION)
-    collection.add(
-        ids=ids,
-        metadatas=metadatas,
-        embeddings=vectors,
-        documents=[m["name"] for m in metadatas],
-    )
-
-    print("Stored " + str(collection.count()) + " image embeddings.")
-    if missing:
-        print("In the database but missing on disk: " + ", ".join(missing))
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+            print("Stored " + str(collection.count()) + " image embeddings.")
+            if missing:
+                print("In the database but missing on disk: " + ", ".join(missing))

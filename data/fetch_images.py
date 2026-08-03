@@ -6,11 +6,10 @@
 # request per attraction got us rate limited almost immediately. Downloads are
 # spaced out and retried when we get a 429.
 #
-# Run:  python -m data.fetch_images
+# Run:  python data/fetch_images.py
 
 import io
 import json
-import sys
 import time
 from pathlib import Path
 
@@ -92,6 +91,10 @@ SOURCES = {
 
 
 def request_with_backoff(url, params=None):
+    # kept as a function rather than copied at its two call sites below (the
+    # title lookup and the image download) - it's retry/backoff logic against a
+    # live, rate-limited API, and two hand-written copies could end up handling
+    # a 429 differently and get the whole team rate-limited
     delay = 2.0
     last_error = None
 
@@ -122,7 +125,9 @@ def request_with_backoff(url, params=None):
 
 def lead_image_urls(titles):
     # returns {article title: image url}. the API renames and redirects some
-    # titles so we map them back to what we asked for
+    # titles so we map them back to what we asked for. kept as a function since
+    # it's called both for the pending list and for orphan recovery below, and
+    # it's the batching/alias logic around the same rate-limited API
     resolved = {}
 
     start = 0
@@ -160,73 +165,11 @@ def lead_image_urls(titles):
     return resolved
 
 
-def download_resized(url, destination):
-    # shrink to 1024px, CLIP resizes to 224x224 anyway so keeping the full
-    # resolution just makes the repo bigger
-    try:
-        response = request_with_backoff(url)
-        image = Image.open(io.BytesIO(response.content)).convert("RGB")
-        image.thumbnail((MAX_EDGE_PX, MAX_EDGE_PX))
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        image.save(destination, "JPEG", quality=88)
-        return True
-    except Exception as error:
-        print("    download failed: " + str(error))
-        return False
-
-
-def load_sources_cache():
-    path = IMAGE_DIR / SOURCES_CACHE
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
-
-
-def save_sources_cache(cache):
-    path = IMAGE_DIR / SOURCES_CACHE
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(cache, indent=2, sort_keys=True), encoding="utf-8")
-
-
-def write_sources_file(cache):
-    # built from the whole cache, not just this run, so stopping and restarting
-    # doesn't chop the table in half
-    if not cache:
-        return
-
-    attributions = []
-    for attraction_id in cache:
-        entry = cache[attraction_id]
-        attributions.append((attraction_id, entry["title"], entry["url"]))
-
-    lines = [
-        "# Image sources",
-        "",
-        "All images were retrieved from Wikimedia Commons through the Wikipedia API.",
-        "Each file carries its own licence, shown on the linked file page.",
-        "Regenerate this list with `python -m data.fetch_images`.",
-        "",
-        "| Attraction | Wikipedia article | File |",
-        "|---|---|---|",
-    ]
-    for attraction_id, title, url in sorted(attributions):
-        article = "https://en.wikipedia.org/wiki/" + title.replace(" ", "_")
-        lines.append("| `" + attraction_id + "` | [" + title + "](" + article +
-                     ") | [file](" + url + ") |")
-
-    output = IMAGE_DIR / "IMAGE_SOURCES.md"
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print("Wrote " + str(output.relative_to(PROJECT_ROOT)))
-
-
 def reconcile_cache(cache):
     # fills in the source for files that are already on disk but not in the
-    # cache (downloaded before the cache existed, or added by hand). only hits
-    # the article API, which isn't the endpoint that throttles.
+    # cache (downloaded before the cache existed, or added by hand). kept as a
+    # function since it wraps the same rate-limited lookup above and is called
+    # from both branches below
     orphans = {}
     for attraction_id in SOURCES:
         folder, title = SOURCES[attraction_id]
@@ -249,29 +192,40 @@ def reconcile_cache(cache):
         if title in urls:
             cache[attraction_id] = {"title": title, "url": urls[title]}
 
-    save_sources_cache(cache)
+    cache_path = IMAGE_DIR / SOURCES_CACHE
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(json.dumps(cache, indent=2, sort_keys=True), encoding="utf-8")
+
     return cache
 
 
-def main():
-    pending = {}
-    for attraction_id in SOURCES:
-        folder, title = SOURCES[attraction_id]
-        if not (IMAGE_DIR / folder / (attraction_id + ".jpg")).exists():
-            pending[attraction_id] = (folder, title)
+pending = {}
+for attraction_id in SOURCES:
+    folder, title = SOURCES[attraction_id]
+    if not (IMAGE_DIR / folder / (attraction_id + ".jpg")).exists():
+        pending[attraction_id] = (folder, title)
 
-    already = len(SOURCES) - len(pending)
-    if already:
-        print(str(already) + " images already downloaded, skipping those.")
-    if not pending:
-        print("Nothing to fetch.")
-        write_sources_file(reconcile_cache(load_sources_cache()))
-        return
+already = len(SOURCES) - len(pending)
+if already:
+    print(str(already) + " images already downloaded, skipping those.")
 
+cache_path = IMAGE_DIR / SOURCES_CACHE
+if cache_path.exists():
+    try:
+        cache = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        cache = {}
+else:
+    cache = {}
+
+if not pending:
+    print("Nothing to fetch.")
+    cache = reconcile_cache(cache)
+else:
     print("Looking up " + str(len(pending)) + " article images...")
     urls = lead_image_urls([title for folder, title in pending.values()])
 
-    cache = reconcile_cache(load_sources_cache())
+    cache = reconcile_cache(cache)
     downloaded = 0
     failures = []
 
@@ -285,17 +239,30 @@ def main():
 
         print(attraction_id + ": downloading")
         destination = IMAGE_DIR / folder / (attraction_id + ".jpg")
-        if download_resized(url, destination):
+
+        # shrink to 1024px, CLIP resizes to 224x224 anyway so keeping the full
+        # resolution just makes the repo bigger
+        try:
+            response = request_with_backoff(url)
+            image = Image.open(io.BytesIO(response.content)).convert("RGB")
+            image.thumbnail((MAX_EDGE_PX, MAX_EDGE_PX))
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            image.save(destination, "JPEG", quality=88)
+            download_ok = True
+        except Exception as error:
+            print("    download failed: " + str(error))
+            download_ok = False
+
+        if download_ok:
             cache[attraction_id] = {"title": title, "url": url}
             # save after each one so an interrupted run keeps what it got
-            save_sources_cache(cache)
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            cache_path.write_text(json.dumps(cache, indent=2, sort_keys=True), encoding="utf-8")
             downloaded += 1
         else:
             failures.append(attraction_id)
 
         time.sleep(REQUEST_DELAY_S)
-
-    write_sources_file(cache)
 
     print("")
     print("Downloaded " + str(downloaded) + " images this run, " + str(len(cache)) +
@@ -304,6 +271,30 @@ def main():
         print("Still missing: " + ", ".join(failures))
         print("Re-run to retry, or add files as data/images/<category>/<id>.jpg")
 
+# write the attribution table - built from the whole cache, not just this run,
+# so stopping and restarting doesn't chop the table in half
+if cache:
+    attributions = []
+    for attraction_id in cache:
+        entry = cache[attraction_id]
+        attributions.append((attraction_id, entry["title"], entry["url"]))
 
-if __name__ == "__main__":
-    sys.exit(main())
+    lines = [
+        "# Image sources",
+        "",
+        "All images were retrieved from Wikimedia Commons through the Wikipedia API.",
+        "Each file carries its own licence, shown on the linked file page.",
+        "Regenerate this list with `python data/fetch_images.py`.",
+        "",
+        "| Attraction | Wikipedia article | File |",
+        "|---|---|---|",
+    ]
+    for attraction_id, title, url in sorted(attributions):
+        article = "https://en.wikipedia.org/wiki/" + title.replace(" ", "_")
+        lines.append("| `" + attraction_id + "` | [" + title + "](" + article +
+                     ") | [file](" + url + ") |")
+
+    output = IMAGE_DIR / "IMAGE_SOURCES.md"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print("Wrote " + str(output.relative_to(PROJECT_ROOT)))

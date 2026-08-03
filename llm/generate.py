@@ -31,63 +31,12 @@ Context:
 Question: {query}"""
 
 
-def get_model_names():
-    # try the good model first then the lite one. the good one only allows about
-    # 20 requests a day on the free tier, so once that runs out the answers get
-    # a bit plainer instead of disappearing
-    models = []
-    models.append(os.getenv("GEMINI_MODEL", "gemini-flash-latest"))
-    models.append(os.getenv("GEMINI_FALLBACK_MODEL", "gemini-flash-lite-latest"))
-    return models
-
-
-def get_api_key():
+def is_configured():
     key = os.getenv("GEMINI_API_KEY", "")
     key = key.strip()
     if key == "your_key_here":
-        return ""
-    return key
-
-
-def is_configured():
-    if get_api_key() == "":
-        return False
-    return True
-
-
-def fallback_answer(query, rows):
-    # no LLM, so just describe what we found. it says so at the bottom to make
-    # it obvious this isn't the generated version
-    if not rows:
-        return ("No attractions in the database matched that query. Try broadening "
-                "the filters, or rephrasing the question.")
-
-    names = []
-    for row in rows[:5]:
-        names.append(row["name"])
-
-    if len(names) == 1:
-        lead = 'The closest match for "' + query + '" is ' + names[0] + "."
-    else:
-        lead = ('The closest matches for "' + query + '" are ' +
-                ", ".join(names[:-1]) + " and " + names[-1] + ".")
-
-    details = []
-    for row in rows[:3]:
-        parts = []
-        parts.append(row["name"] + " is in " + row.get("district", "Sri Lanka"))
-        if row.get("best_season"):
-            parts.append("best visited " + row["best_season"])
-        if row.get("entrance_fee"):
-            parts.append("entrance " + row["entrance_fee"].lower())
-        if row.get("accessibility"):
-            parts.append(row["accessibility"] + " to reach")
-        details.append(", ".join(parts) + ".")
-
-    note = ("\n\n(Generated without the language model - no Gemini API key is "
-            "configured, so this summary is composed directly from the retrieved "
-            "database rows.)")
-    return lead + "\n\n" + " ".join(details) + note
+        key = ""
+    return key != ""
 
 
 def generate_answer(query, context, rows=None):
@@ -95,15 +44,61 @@ def generate_answer(query, context, rows=None):
         rows = []
 
     if not is_configured():
-        return {"answer": fallback_answer(query, rows), "source": "fallback"}
+        # no LLM, so just describe what we found. it says so at the bottom to
+        # make it obvious this isn't the generated version
+        if not rows:
+            answer = ("No attractions in the database matched that query. Try broadening "
+                       "the filters, or rephrasing the question.")
+        else:
+            names = []
+            for row in rows[:5]:
+                names.append(row["name"])
+
+            if len(names) == 1:
+                lead = 'The closest match for "' + query + '" is ' + names[0] + "."
+            else:
+                lead = ('The closest matches for "' + query + '" are ' +
+                        ", ".join(names[:-1]) + " and " + names[-1] + ".")
+
+            details = []
+            for row in rows[:3]:
+                parts = []
+                parts.append(row["name"] + " is in " + row.get("district", "Sri Lanka"))
+                if row.get("best_season"):
+                    parts.append("best visited " + row["best_season"])
+                if row.get("entrance_fee"):
+                    parts.append("entrance " + row["entrance_fee"].lower())
+                if row.get("accessibility"):
+                    parts.append(row["accessibility"] + " to reach")
+                details.append(", ".join(parts) + ".")
+
+            note = ("\n\n(Generated without the language model - no Gemini API key is "
+                    "configured, so this summary is composed directly from the retrieved "
+                    "database rows.)")
+            answer = lead + "\n\n" + " ".join(details) + note
+
+        return {"answer": answer, "source": "fallback"}
 
     prompt = SYSTEM_PROMPT.format(context=context, query=query)
 
-    for model_name in get_model_names():
+    # try the good model first then the lite one. the good one only allows about
+    # 20 requests a day on the free tier, so once that runs out the answers get
+    # a bit plainer instead of disappearing
+    model_names = [
+        os.getenv("GEMINI_MODEL", "gemini-flash-latest"),
+        os.getenv("GEMINI_FALLBACK_MODEL", "gemini-flash-lite-latest"),
+    ]
+
+    key = os.getenv("GEMINI_API_KEY", "")
+    key = key.strip()
+    if key == "your_key_here":
+        key = ""
+
+    for model_name in model_names:
         try:
             import google.generativeai as genai
 
-            genai.configure(api_key=get_api_key())
+            genai.configure(api_key=key)
             model = genai.GenerativeModel(model_name)
             response = model.generate_content(
                 prompt,
@@ -122,4 +117,36 @@ def generate_answer(query, context, rows=None):
             print("[generate] " + model_name + " not available (" +
                   str(error)[:120] + ")")
 
-    return {"answer": fallback_answer(query, rows), "source": "fallback"}
+    # every model failed, fall back to describing the rows ourselves again
+    if not rows:
+        answer = ("No attractions in the database matched that query. Try broadening "
+                   "the filters, or rephrasing the question.")
+    else:
+        names = []
+        for row in rows[:5]:
+            names.append(row["name"])
+
+        if len(names) == 1:
+            lead = 'The closest match for "' + query + '" is ' + names[0] + "."
+        else:
+            lead = ('The closest matches for "' + query + '" are ' +
+                    ", ".join(names[:-1]) + " and " + names[-1] + ".")
+
+        details = []
+        for row in rows[:3]:
+            parts = []
+            parts.append(row["name"] + " is in " + row.get("district", "Sri Lanka"))
+            if row.get("best_season"):
+                parts.append("best visited " + row["best_season"])
+            if row.get("entrance_fee"):
+                parts.append("entrance " + row["entrance_fee"].lower())
+            if row.get("accessibility"):
+                parts.append(row["accessibility"] + " to reach")
+            details.append(", ".join(parts) + ".")
+
+        note = ("\n\n(Generated without the language model - no Gemini API key is "
+                "configured, so this summary is composed directly from the retrieved "
+                "database rows.)")
+        answer = lead + "\n\n" + " ".join(details) + note
+
+    return {"answer": answer, "source": "fallback"}

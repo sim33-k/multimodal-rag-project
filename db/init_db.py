@@ -1,13 +1,9 @@
-# Creates the tables and loads the CSVs into them.
-# The CSVs are flat (one row = one attraction) because that's easier to edit in
-# Excel, so this script has to split each row into the main table + the detail
-# table for that category.
-#
-# Run:  python -m db.init_db
-
 import csv
 import sys
 from pathlib import Path
+
+# db isn't installed as a package, so add the project root to the path by hand
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import text
 
@@ -78,97 +74,94 @@ CATEGORIES = {
     },
 }
 
+# schema.sql drops everything first, so running this again is a full reset
+sql = SCHEMA_FILE.read_text(encoding="utf-8")
+with get_engine().begin() as conn:
+    conn.execute(text(sql))
+print("Schema created.")
 
-def clean(value):
-    # empty cells should be NULL, not ""
-    if value is None:
-        return None
-    value = value.strip()
-    if value == "":
-        return None
-    return value
+print("Loading CSVs...")
+total = 0
 
+with get_engine().begin() as conn:
+    for filename in CATEGORIES:
+        config = CATEGORIES[filename]
+        csv_path = RAW_DIR / filename
+        if not csv_path.exists():
+            print("  skipping " + filename + " (not found)")
+            continue
 
-def to_float(value):
-    value = clean(value)
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except ValueError:
-        return None
+        with csv_path.open(newline="", encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle))
 
+        core_sql = text(
+            """
+            INSERT INTO attractions
+                (id, name, category, location, district, latitude, longitude,
+                 entrance_fee, accessibility, best_season)
+            VALUES
+                (:id, :name, :category, :location, :district, :latitude, :longitude,
+                 :entrance_fee, :accessibility, :best_season)
+            ON CONFLICT (id) DO NOTHING
+            """
+        )
 
-def to_bool(value):
-    value = clean(value)
-    if value is None:
-        return None
-    return value.lower() in ["true", "yes", "1", "y"]
+        detail_cols = config["detail_columns"]
+        placeholders = ", ".join(":" + c for c in detail_cols)
+        detail_sql = text(
+            "INSERT INTO " + config["detail_table"] +
+            " (attraction_id, " + ", ".join(detail_cols) + ")" +
+            " VALUES (:attraction_id, " + placeholders + ")" +
+            " ON CONFLICT (attraction_id) DO NOTHING"
+        )
 
+        for row in rows:
+            # empty cells should be NULL, not ""
+            core = {}
+            for col in CORE_COLUMNS:
+                value = row.get(col)
+                if value is not None:
+                    value = value.strip()
+                    if value == "":
+                        value = None
+                core[col] = value
 
-def create_schema():
-    # schema.sql drops everything first, so running this again is a full reset
-    sql = SCHEMA_FILE.read_text(encoding="utf-8")
-    with get_engine().begin() as conn:
-        conn.execute(text(sql))
-    print("Schema created.")
+            for col in ("latitude", "longitude"):
+                value = core[col]
+                if value is not None:
+                    try:
+                        value = float(value)
+                    except ValueError:
+                        value = None
+                core[col] = value
 
+            core["category"] = config["category"]
+            conn.execute(core_sql, core)
 
-def load_category(conn, filename, config):
-    csv_path = RAW_DIR / filename
-    if not csv_path.exists():
-        print("  skipping " + filename + " (not found)")
-        return 0
+            detail = {"attraction_id": row["id"].strip()}
+            for col in detail_cols:
+                value = row.get(col)
+                if value is not None:
+                    value = value.strip()
+                    if value == "":
+                        value = None
 
-    with csv_path.open(newline="", encoding="utf-8") as handle:
-        rows = list(csv.DictReader(handle))
+                if col in config["boolean_columns"]:
+                    if value is not None:
+                        value = value.lower() in ["true", "yes", "1", "y"]
+                elif col in config["numeric_columns"]:
+                    if value is not None:
+                        try:
+                            value = float(value)
+                        except ValueError:
+                            value = None
 
-    core_sql = text(
-        """
-        INSERT INTO attractions
-            (id, name, category, location, district, latitude, longitude,
-             entrance_fee, accessibility, best_season)
-        VALUES
-            (:id, :name, :category, :location, :district, :latitude, :longitude,
-             :entrance_fee, :accessibility, :best_season)
-        ON CONFLICT (id) DO NOTHING
-        """
-    )
+                detail[col] = value
+            conn.execute(detail_sql, detail)
 
-    detail_cols = config["detail_columns"]
-    placeholders = ", ".join(":" + c for c in detail_cols)
-    detail_sql = text(
-        "INSERT INTO " + config["detail_table"] +
-        " (attraction_id, " + ", ".join(detail_cols) + ")" +
-        " VALUES (:attraction_id, " + placeholders + ")" +
-        " ON CONFLICT (attraction_id) DO NOTHING"
-    )
+        total = total + len(rows)
+        print("  " + filename + ": " + str(len(rows)) + " rows")
 
-    for row in rows:
-        core = {}
-        for col in CORE_COLUMNS:
-            core[col] = clean(row.get(col))
-        core["latitude"] = to_float(row.get("latitude"))
-        core["longitude"] = to_float(row.get("longitude"))
-        core["category"] = config["category"]
-        conn.execute(core_sql, core)
-
-        detail = {"attraction_id": row["id"].strip()}
-        for col in detail_cols:
-            raw = row.get(col)
-            if col in config["boolean_columns"]:
-                detail[col] = to_bool(raw)
-            elif col in config["numeric_columns"]:
-                detail[col] = to_float(raw)
-            else:
-                detail[col] = clean(raw)
-        conn.execute(detail_sql, detail)
-
-    print("  " + filename + ": " + str(len(rows)) + " rows")
-    return len(rows)
-
-
-def load_images(conn):
     # Match image files to attractions by filename, e.g. sigiriya.jpg and
     # sigiriya_2.jpg both belong to sigiriya.
     known_ids = set()
@@ -218,21 +211,5 @@ def load_images(conn):
             inserted = inserted + 1
 
     print("  registered " + str(inserted) + " images")
-    return inserted
 
-
-def main():
-    create_schema()
-
-    print("Loading CSVs...")
-    total = 0
-    with get_engine().begin() as conn:
-        for filename in CATEGORIES:
-            total = total + load_category(conn, filename, CATEGORIES[filename])
-        load_images(conn)
-
-    print("Done. " + str(total) + " attractions loaded.")
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+print("Done. " + str(total) + " attractions loaded.")
