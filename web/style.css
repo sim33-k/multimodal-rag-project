@@ -102,15 +102,6 @@ button:disabled { background: #999; cursor: default; }
     border: 1px solid #ccc;
 }
 
-.filters {
-    margin: 16px 0;
-    padding: 8px 12px 12px;
-    border: 1px solid #ddd;
-}
-
-.filters legend { font-size: 13px; color: #555; }
-.filters label { font-size: 13px; margin-right: 16px; }
-
 /* results */
 
 #loading {
@@ -162,11 +153,6 @@ button:disabled { background: #999; cursor: default; }
 }
 
 #cards li::after { content: ""; display: block; clear: both; }
-
-/* map */
-
-#map { width: 240px; height: 390px; border: 1px solid #ddd; }
-#map .island { fill: #eef3f3; stroke: #b9cfce; }
 
 /* retrieved context */
 

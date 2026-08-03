@@ -43,15 +43,6 @@
   <button data-run="hybrid">Ask</button>
 </div>
 
-<fieldset class="filters">
-  <legend>Filters</legend>
-  <label>Category <select id="category"><option value="">All</option></select></label>
-  <label>District <select id="district"><option value="">All</option></select></label>
-  <label>Accessibility <select id="accessibility"><option value="">Any</option></select></label>
-  <label>Results <input type="number" id="limit" value="6" min="1" max="20"></label>
-  <label><input type="checkbox" id="generate" checked> Generate answer</label>
-</fieldset>
-
 <p id="loading" hidden>Searching...</p>
 <p id="error" class="error" hidden></p>
 
@@ -60,8 +51,6 @@
   <p id="route" class="note"></p>
   <p id="count"></p>
   <ol id="cards"></ol>
-  <h2>Map</h2>
-  <svg id="map" viewBox="0 0 240 390"></svg>
   <details>
     <summary>Retrieved context passed to the model</summary>
     <pre id="context"></pre>

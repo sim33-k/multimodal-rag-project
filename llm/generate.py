@@ -102,7 +102,7 @@ def generate_answer(query, context, rows=None):
             model = genai.GenerativeModel(model_name)
             response = model.generate_content(
                 prompt,
-                generation_config={"temperature": 0.4, "max_output_tokens": 800},
+                generation_config={"temperature": 0.4, "max_output_tokens": 2048},
             )
             text = response.text
             if text is None:

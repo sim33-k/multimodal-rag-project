@@ -12,13 +12,6 @@ const LABELS = {
     historical_site: "historical site",
 };
 
-const COLOURS = {
-    beach: "#14a0a0",
-    mountain: "#073b3a",
-    national_park: "#4c8c4a",
-    historical_site: "#c75b39",
-};
-
 // which extra fields to show per category
 const FIELDS = {
     beach: [["activity_type", "Activities"], ["water_quality", "Water"]],
@@ -34,11 +27,11 @@ function esc(v) {
 
 function opts() {
     return {
-        category: $("category").value || null,
-        district: $("district").value || null,
-        accessibility: $("accessibility").value || null,
-        limit: Number($("limit").value) || 6,
-        generate: $("generate").checked,
+        category: null,
+        district: null,
+        accessibility: null,
+        limit: 6,
+        generate: true,
     };
 }
 
@@ -115,38 +108,6 @@ function showCards(rows) {
     }).join("");
 }
 
-// Simplified coastline, as [lat, lon]. Drawn with the same projection as the
-// pins so they line up.
-const COAST = [
-    [9.82, 80.20], [9.70, 80.05], [9.35, 79.85], [8.95, 79.70], [8.55, 79.72],
-    [8.20, 79.72], [7.70, 79.80], [7.20, 79.83], [6.70, 79.88], [6.30, 80.00],
-    [6.05, 80.15], [5.95, 80.45], [5.92, 80.75], [6.05, 81.10], [6.25, 81.35],
-    [6.60, 81.65], [7.00, 81.80], [7.50, 81.85], [8.00, 81.35], [8.35, 81.30],
-    [8.60, 81.20], [9.00, 80.95], [9.35, 80.70], [9.60, 80.45],
-];
-
-function project(lat, lon) {
-    return [
-        (lon - 79.6) / 2.4 * 240,
-        (9.9 - lat) / 4.05 * 390,
-    ];
-}
-
-function showMap(rows) {
-    const outline = COAST.map(([la, lo]) =>
-        project(la, lo).map((n) => n.toFixed(1)).join(",")).join(" ");
-
-    const pins = rows.filter((r) => r.latitude != null && r.longitude != null)
-        .map((r) => {
-            const [x, y] = project(r.latitude, r.longitude);
-            return '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) +
-                '" r="4" fill="' + (COLOURS[r.category] || "#777") +
-                '" stroke="#fff"><title>' + esc(r.name) + "</title></circle>";
-        }).join("");
-
-    $("map").innerHTML = '<polygon class="island" points="' + outline + '"/>' + pins;
-}
-
 function show(data) {
     $("error").hidden = true;
     $("results").hidden = false;
@@ -158,7 +119,6 @@ function show(data) {
     $("count").textContent = rows.length + (rows.length === 1 ? " result" : " results");
 
     showCards(rows);
-    showMap(rows);
     $("context").textContent = data.context || "";
 
     // Results sit below the form, so on a short window nothing appears to happen
@@ -240,25 +200,6 @@ async function run(kind) {
 
 // --- setup ---
 
-async function loadFilters() {
-    try {
-        const o = await (await fetch(API + "/filters")).json();
-        const fill = (id, values, label) => {
-            for (const v of values) {
-                const el = document.createElement("option");
-                el.value = v;
-                el.textContent = label ? label(v) : v;
-                $(id).appendChild(el);
-            }
-        };
-        fill("category", o.categories, (v) => LABELS[v] || v);
-        fill("district", o.districts);
-        fill("accessibility", o.accessibility);
-    } catch {
-        // the status line below reports the real problem
-    }
-}
-
 // Only says anything when something is actually wrong. Without this a missing
 // database or an empty collection just looks like a search that found nothing.
 async function checkHealth() {
@@ -303,5 +244,4 @@ $("file").onchange = (e) => {
     $("preview").hidden = false;
 };
 
-loadFilters();
 checkHealth();
