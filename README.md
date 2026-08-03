@@ -1,72 +1,49 @@
 # SL Tourism Multimodal RAG
 
-A retrieval-augmented search system over Sri Lankan tourist attractions across four
-categories — beaches, mountains, national parks and historical sites. It combines
-structured SQL and full-text search in PostgreSQL with text and image embeddings in
-ChromaDB, merges the ranked results with Reciprocal Rank Fusion, and generates a
-grounded natural-language answer.
+A retrieval augmented search system over Sri Lankan tourist attractions (beaches,
+mountains, national parks, historical sites). It combines structured SQL and
+full text search in PostgreSQL with text and image embeddings in ChromaDB, merges
+the results with Reciprocal Rank Fusion, and generates an answer grounded in what
+was actually retrieved.
 
-**SCS 4203 Assignment 2** · Murshid & Simaak
-
----
+SCS 4203 Assignment 2, Murshid Bawa (22000224) & Simaak (22001913).
 
 ## What it does
 
-Four query modes, each backed by its own retrieval strategy:
+There are four query modes:
 
-| Mode | Retriever | Example query |
-|---|---|---|
-| **Structured** | SQL filters over `attractions_full`, plus Postgres `tsvector` full-text | beaches in Galle district with free entry |
-| **Semantic** | MiniLM sentence embeddings in ChromaDB | somewhere quiet to watch birds near a lagoon |
-| **Image** | CLIP embeddings — upload a photo, or describe a scene | *(upload a beach photo)* |
-| **Hybrid** | Gemini routes the query, multiple retrievers run, RRF merges them | UNESCO sites in Matale worth a day trip |
-
----
+- Structured: SQL filters over `attractions_full`, plus Postgres `tsvector` full text search. Example: beaches in Galle district with free entry.
+- Semantic: MiniLM sentence embeddings in ChromaDB. Example: somewhere quiet to watch birds near a lagoon.
+- Image: CLIP embeddings, either upload a photo or describe a scene in words.
+- Hybrid: Gemini routes the query, several retrievers run, and the results get merged with RRF. Example: UNESCO sites in Matale worth a day trip.
 
 ## Architecture
 
-```
-Browser UI  ──HTTP──▶  FastAPI  ──▶  router (Gemini structured output)
-                                          │
-                            ┌─────────────┼─────────────┬──────────────┐
-                            ▼             ▼             ▼              ▼
-                       SQL filters   full-text     MiniLM text     CLIP image
-                       (Postgres)    (tsvector)    (ChromaDB)      (ChromaDB)
-                            └─────────────┴──────┬──────┴──────────────┘
-                                                 ▼
-                                    Reciprocal Rank Fusion (k=60)
-                                                 ▼
-                                    context builder ──▶ Gemini ──▶ answer
-```
+The browser talks to FastAPI, which never lets the frontend touch Postgres or
+ChromaDB directly. A query first goes through the router (Gemini structured
+output), which decides which retrievers to call: SQL filters and full text search
+against Postgres, or MiniLM/CLIP embedding search against ChromaDB. Whatever comes
+back gets merged with Reciprocal Rank Fusion (k=60), turned into context, and
+handed to Gemini to write the final answer.
 
-The frontend never touches PostgreSQL or ChromaDB directly. It only calls the API,
-which means the whole retrieval pipeline is independently demonstrable through the
-auto-generated Swagger docs at `/docs`.
+Because everything goes through the API, the whole pipeline can also be tested
+directly through the Swagger docs at `/docs` without touching the frontend.
 
-Detailed write-ups live in [docs/](docs/):
-[architecture](docs/ARCHITECTURE.md) ·
-[database design](docs/DATABASE.md) ·
-[embeddings](docs/EMBEDDINGS.md) ·
-[API reference](docs/API.md) ·
-[evaluation](docs/EVALUATION.md)
-
----
+More detail in [docs/](docs/): [architecture](docs/ARCHITECTURE.md),
+[database design](docs/DATABASE.md), [embeddings](docs/EMBEDDINGS.md),
+[API reference](docs/API.md), [evaluation](docs/EVALUATION.md).
 
 ## Prerequisites
 
-- **Docker Desktop** (or Docker Engine + Compose) — runs PostgreSQL, so you don't
-  install Postgres by hand.
-- **Python 3.10+** (the project is developed against 3.13).
-- **Git**, to clone the repo.
-- A free **Gemini API key** from <https://aistudio.google.com/apikey> — optional,
-  see step 3.
-- No GPU required. The embedding models run on CPU; the first run downloads
-  `all-MiniLM-L6-v2` (~90MB) and CLIP ViT-B/32 (~600MB), so have a working
-  internet connection the first time you run the embedding scripts.
+- Docker Desktop (or Docker Engine + Compose), so you don't have to install Postgres by hand.
+- Python 3.10+ (developed against 3.13).
+- Git.
+- A free Gemini API key from https://aistudio.google.com/apikey. Optional, see step 3 below.
+- No GPU needed. The embedding models run on CPU. First run downloads all-MiniLM-L6-v2 (~90MB) and CLIP ViT-B/32 (~600MB), so make sure you have internet the first time you run the embedding scripts.
 
 ## Installation
 
-### 0. Clone the repository
+### 0. Clone the repo
 
 ```bash
 git clone <this-repo-url>
@@ -75,26 +52,23 @@ cd multimodal-rag-project
 
 ### 1. PostgreSQL via Docker
 
-Both team members run the same container, so the environment is identical.
+Both team members run the same container so the environment matches.
 
 ```bash
 docker compose up -d
 ```
 
-This starts PostgreSQL 16 on port 5432 with database `sltourism`, user
+This starts PostgreSQL 16 on port 5432, database `sltourism`, user
 `sltourism_user`, password `devpassword`.
 
-<details>
-<summary>No Docker? Native PostgreSQL fallback</summary>
-
-Install PostgreSQL 16 and create a matching database and user:
+If you don't want to use Docker, install PostgreSQL 16 yourself and create a
+matching database and user:
 
 ```sql
 CREATE DATABASE sltourism;
 CREATE USER sltourism_user WITH PASSWORD 'devpassword';
 GRANT ALL PRIVILEGES ON DATABASE sltourism TO sltourism_user;
 ```
-</details>
 
 ### 2. Python environment
 
@@ -113,8 +87,8 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Then edit `.env` and add a Gemini API key — free from
-<https://aistudio.google.com/apikey>:
+Then edit `.env` and add a Gemini API key (free, from
+https://aistudio.google.com/apikey):
 
 ```
 GEMINI_API_KEY=your_key_here
@@ -122,19 +96,20 @@ DATABASE_URL=postgresql://sltourism_user:devpassword@localhost:5432/sltourism
 API_BASE_URL=http://localhost:8000
 ```
 
-`.env` is gitignored and must never be committed.
+`.env` is gitignored, don't commit it.
 
-> The system runs without a key: query routing falls back to a keyword heuristic
-> and answers are composed directly from the retrieved rows. Retrieval itself is
-> unaffected. See [graceful degradation](docs/ARCHITECTURE.md#graceful-degradation).
+Note: the system still runs without a key. Query routing falls back to a keyword
+heuristic and answers get composed directly from the retrieved rows instead of
+Gemini. Retrieval itself still works fine. See
+[graceful degradation](docs/ARCHITECTURE.md#graceful-degradation).
 
-**On model names and quotas.** Free-tier quotas are per-model and several models
-report a zero quota or are closed to new API keys — which fails in a way that
-looks like a bad key but is not. The defaults use the `*-latest` aliases, which
-keep working. Routing uses a lite model because it runs on every query, while
-answers use the flagship flash model, whose free-tier allowance is only about 20
-requests per day. Override any of them in `.env` via `GEMINI_MODEL`,
-`GEMINI_FALLBACK_MODEL` and `GEMINI_ROUTER_MODEL`.
+A note on model names and quotas: free tier quotas are per model, and a few
+models report zero quota or are closed to new keys, which looks like a bad key
+but isn't. The defaults use the `*-latest` aliases since those keep working.
+Routing uses a lite model because it runs on every query, while answers use the
+flagship flash model, which only gets about 20 free requests a day. You can
+override any of these in `.env` with `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL` and
+`GEMINI_ROUTER_MODEL`.
 
 ### 4. Build the data
 
@@ -144,39 +119,38 @@ python embeddings/text_embed.py    # MiniLM description embeddings
 python embeddings/image_embed.py   # CLIP image embeddings
 ```
 
-Images are committed to the repository, so a fresh clone needs no downloads.
+Images are already committed to the repo, so a fresh clone doesn't need to
+download anything.
 
-`init_db.py` resets the schema on every run, so it is safe to re-run after editing
-a CSV.
+`init_db.py` resets the schema every time it runs, so it's safe to run again
+after editing a CSV.
 
 To add or refresh images:
 
 ```bash
 python data/fetch_images.py        # skips files it already has
-python db/init_db.py               # re-register
-python embeddings/image_embed.py   # re-embed
+python db/init_db.py               # register again
+python embeddings/image_embed.py   # embed again
 ```
 
-> Wikimedia rate-limits bulk downloads aggressively and the script backs off when
-> it hits that. A run may fetch only part of the set — re-run it later and it will
-> resume where it stopped. Attribution accumulates in
-> `data/images/IMAGE_SOURCES.md` across runs.
+Note: Wikimedia limits bulk downloads pretty aggressively and the script
+backs off when that happens. A single run might only fetch part of the set, just
+run it again later and it picks up where it left off. Attribution accumulates in
+`data/images/IMAGE_SOURCES.md` across runs.
 
 ### 5. Run
 
-One command runs everything — the frontend is served by the API itself:
+One command runs everything, the frontend is served by the API itself:
 
 ```bash
 uvicorn api.main:app --reload --port 8000
 ```
 
-| | |
-|---|---|
-| Web UI | <http://localhost:8000/ui> |
-| API docs (Swagger) | <http://localhost:8000/docs> |
-| Health check | <http://localhost:8000/health> |
+Then open:
 
----
+- Web UI: http://localhost:8000/ui
+- API docs (Swagger): http://localhost:8000/docs
+- Health check: http://localhost:8000/health
 
 ## Project layout
 
@@ -184,7 +158,7 @@ uvicorn api.main:app --reload --port 8000
 data/
   raw/                 flat CSVs, one per category
   descriptions/        prose descriptions used for text embeddings
-  images/              attraction images + per-file source attribution
+  images/              attraction images + per file source attribution
   fetch_images.py      rebuilds or tops up the image set from Wikimedia
 db/
   schema.sql           normalised schema, attractions_full view, tsvector column
@@ -200,72 +174,26 @@ retrieval/
   semantic_search.py   ChromaDB text search
   image_search.py      ChromaDB image search
   hybrid_fusion.py     Reciprocal Rank Fusion
-  router.py            Gemini structured-output intent classifier
+  router.py            Gemini structured output intent classifier
 llm/
   context_builder.py   assembles retrieved rows into prompt context
   generate.py          Gemini answer generation
 api/
   main.py              app instance, CORS, static images, health
   schemas.py           Pydantic request/response models
-  routes/              one module per query type
+  routes/               one module per query type
 web/
   index.html           frontend, served by the API at /ui
   style.css            no framework, no external assets
-  app.js               no libraries; calls the API over HTTP
+  app.js               no libraries, calls the API over HTTP
 docs/                  architecture, database, embeddings, API, evaluation
 ```
-
----
-
-## Health check
-
-`GET /health` reports what is configured, which is the fastest way to diagnose
-empty results:
-
-```json
-{
-  "status": "ok",
-  "database": true,
-  "text_collection": 40,
-  "image_collection": 23,
-  "gemini_configured": true
-}
-```
-
-`text_collection: 0` means `embeddings.text_embed` has not been run.
-`image_collection: 0` means images have not been fetched or embedded.
-
-All 40 attractions are text-searchable. `image_collection` is lower because
-Wikimedia rate-limiting left part of the image set undownloaded — this affects the
-image tab only; structured, semantic and hybrid search cover all four categories
-regardless. Re-run `python data/fetch_images.py` to top it up.
-
----
-
-## Troubleshooting
-
-| Symptom | Cause | Fix |
-|---|---|---|
-| "Cannot reach the API" in the UI | The server isn't running | `uvicorn api.main:app --reload --port 8000` |
-| `/health` shows `"database": false` | Docker container isn't up | `docker compose up -d`, then check `docker compose ps` |
-| `text_collection: 0` | Text embeddings never built | `python embeddings/text_embed.py` |
-| `image_collection: 0` | Image embeddings never built | `python data/fetch_images.py` then `python embeddings/image_embed.py` |
-| `gemini_configured: false` | No API key set, or `.env` wasn't created | `cp .env.example .env` and add `GEMINI_API_KEY` |
-| First query after startup is very slow | MiniLM and CLIP models load lazily on first use, not at startup | Expected — later queries are fast |
-| `docker compose up -d` fails, port 5432 in use | Another Postgres instance already running | Stop it, or change the port mapping in `docker-compose.yml` and `DATABASE_URL` together |
-| Structured/semantic/hybrid queries return nothing | Schema not initialised or CSVs not loaded | `python db/init_db.py` |
-
-The system is designed to degrade rather than error out — a missing Gemini key
-or an empty collection narrows what a query mode can do, but never crashes the
-API. `/health` is always the fastest way to see what's actually missing.
-
----
 
 ## Data sources
 
 Attraction data is compiled from public sources including Wikipedia and the Sri
-Lanka Tourism Development Authority. Images are retrieved from Wikimedia Commons;
-per-file attribution is written to `data/images/IMAGE_SOURCES.md` by the fetch
+Lanka Tourism Development Authority. Images come from Wikimedia Commons,
+per file attribution is written to `data/images/IMAGE_SOURCES.md` by the fetch
 script.
 
 Models and libraries used are credited in [docs/EMBEDDINGS.md](docs/EMBEDDINGS.md)
