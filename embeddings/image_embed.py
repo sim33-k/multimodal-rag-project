@@ -1,12 +1,10 @@
-"""Image embeddings for visual search, using OpenAI CLIP ViT-B/32.
-
-CLIP puts images and text into a single shared vector space. That is what makes
-both halves of the image tab work: an uploaded photo is compared against stored
-photos, and a text phrase like "ancient stone ruins" can also be matched directly
-against images without any caption having been written.
-
-Run with:  python -m embeddings.image_embed
-"""
+# Image embeddings using CLIP.
+#
+# CLIP puts pictures and text in the same vector space, which is why the image
+# tab can do both things: upload a photo and find similar photos, or type
+# "golden sand" and match against the photos directly.
+#
+# Run:  python -m embeddings.image_embed
 
 import sys
 
@@ -18,67 +16,60 @@ from db.connection import PROJECT_ROOT, fetch_all
 from embeddings import IMAGE_COLLECTION, reset_collection
 
 MODEL_NAME = "openai/clip-vit-base-patch32"
+BATCH_SIZE = 16
 
-_model: CLIPModel | None = None
-_processor: CLIPProcessor | None = None
-
-
-def get_model() -> tuple[CLIPModel, CLIPProcessor]:
-    """Loaded once per process. The first call downloads ~600MB to the HF cache."""
-    global _model, _processor
-    if _model is None:
-        _model = CLIPModel.from_pretrained(MODEL_NAME)
-        _model.eval()
-        _processor = CLIPProcessor.from_pretrained(MODEL_NAME)
-    return _model, _processor
+model = None
+processor = None
 
 
-def _as_tensor(output) -> torch.Tensor:
-    """Pull the embedding tensor out of whatever get_*_features returned.
+def get_model():
+    # first run downloads about 600MB
+    global model, processor
+    if model is None:
+        model = CLIPModel.from_pretrained(MODEL_NAME)
+        model.eval()
+        processor = CLIPProcessor.from_pretrained(MODEL_NAME)
+    return model, processor
 
-    transformers 4.x returns a bare tensor here; 5.x returns a ModelOutput whose
-    pooler_output holds the projected embedding. Handling both keeps this working
-    across the versions either team member might have installed.
-    """
+
+def as_tensor(output):
+    # transformers 4.x gives back a plain tensor here but 5.x gives an object
+    # with the tensor in .pooler_output, so handle both
     if isinstance(output, torch.Tensor):
         return output
     if getattr(output, "pooler_output", None) is not None:
         return output.pooler_output
-    raise TypeError(f"Unexpected CLIP output type: {type(output).__name__}")
+    raise TypeError("Unexpected CLIP output: " + type(output).__name__)
 
 
-def _normalise(features: torch.Tensor) -> torch.Tensor:
-    """Unit-length rows, so cosine distance in Chroma behaves as expected."""
+def normalise(features):
+    # make them unit length so cosine distance works properly
     return features / features.norm(dim=-1, keepdim=True)
 
 
-def embed_images(images: list[Image.Image]) -> list[list[float]]:
-    model, processor = get_model()
-    inputs = processor(images=images, return_tensors="pt")
+def embed_images(images):
+    m, p = get_model()
+    inputs = p(images=images, return_tensors="pt")
     with torch.no_grad():
-        features = _as_tensor(model.get_image_features(**inputs))
-    return _normalise(features).tolist()
+        features = as_tensor(m.get_image_features(**inputs))
+    return normalise(features).tolist()
 
 
-def embed_image(image: Image.Image) -> list[float]:
-    """Encode one uploaded image for a visual similarity query."""
+def embed_image(image):
     return embed_images([image])[0]
 
 
-def embed_text(text: str) -> list[float]:
-    """Encode a text phrase into CLIP's shared space, for text-to-image search.
-
-    Note this is a different vector space from the MiniLM embeddings used for
-    semantic description search - the two are never compared against each other.
-    """
-    model, processor = get_model()
-    inputs = processor(text=[text], return_tensors="pt", padding=True, truncation=True)
+def embed_text(text):
+    # NOTE: this is CLIP's text encoder, not MiniLM. Different vector space,
+    # never compare the two.
+    m, p = get_model()
+    inputs = p(text=[text], return_tensors="pt", padding=True, truncation=True)
     with torch.no_grad():
-        features = _as_tensor(model.get_text_features(**inputs))
-    return _normalise(features)[0].tolist()
+        features = as_tensor(m.get_text_features(**inputs))
+    return normalise(features)[0].tolist()
 
 
-def main() -> None:
+def main():
     rows = fetch_all(
         """
         SELECT i.image_id, i.file_path, i.caption,
@@ -89,16 +80,14 @@ def main() -> None:
         """
     )
     if not rows:
-        print(
-            "No images registered. Run `python -m data.fetch_images` then "
-            "`python -m db.init_db` first."
-        )
+        print("No images in the database. Run python -m data.fetch_images then "
+              "python -m db.init_db first.")
         return
 
-    ids: list[str] = []
-    metadatas: list[dict] = []
-    loaded: list[Image.Image] = []
-    missing: list[str] = []
+    ids = []
+    metadatas = []
+    loaded = []
+    missing = []
 
     for row in rows:
         path = PROJECT_ROOT / row["file_path"]
@@ -106,33 +95,32 @@ def main() -> None:
             missing.append(row["file_path"])
             continue
         loaded.append(Image.open(path).convert("RGB"))
-        # The Chroma id is the image id, not the attraction id, because one
-        # attraction can have several images. The attraction is carried in metadata
-        # so results can be collapsed back per attraction at query time.
-        ids.append(f"img_{row['image_id']}")
-        metadatas.append(
-            {
-                "attraction_id": row["attraction_id"],
-                "name": row["name"],
-                "category": row["category"],
-                "district": row["district"] or "",
-                "file_path": row["file_path"],
-                "caption": row["caption"] or "",
-            }
-        )
+        # id is the image id not the attraction id, because one attraction can
+        # have more than one photo. attraction_id goes in the metadata so we can
+        # group them back together when searching.
+        ids.append("img_" + str(row["image_id"]))
+        metadatas.append({
+            "attraction_id": row["attraction_id"],
+            "name": row["name"],
+            "category": row["category"],
+            "district": row["district"] or "",
+            "file_path": row["file_path"],
+            "caption": row["caption"] or "",
+        })
 
     if not loaded:
-        print("No image files found on disk. Nothing to embed.")
+        print("No image files found on disk.")
         return
 
-    print(f"Encoding {len(loaded)} images with {MODEL_NAME}...")
+    print("Encoding " + str(len(loaded)) + " images with " + MODEL_NAME + "...")
 
-    # Batched so memory stays flat regardless of how many images are added later.
-    vectors: list[list[float]] = []
-    batch_size = 16
-    for start in range(0, len(loaded), batch_size):
-        vectors.extend(embed_images(loaded[start : start + batch_size]))
-        print(f"  {min(start + batch_size, len(loaded))}/{len(loaded)}")
+    vectors = []
+    start = 0
+    while start < len(loaded):
+        batch = loaded[start:start + BATCH_SIZE]
+        vectors.extend(embed_images(batch))
+        start = start + BATCH_SIZE
+        print("  " + str(min(start, len(loaded))) + "/" + str(len(loaded)))
 
     collection = reset_collection(IMAGE_COLLECTION)
     collection.add(
@@ -142,9 +130,9 @@ def main() -> None:
         documents=[m["name"] for m in metadatas],
     )
 
-    print(f"Stored {collection.count()} image embeddings in '{IMAGE_COLLECTION}'.")
+    print("Stored " + str(collection.count()) + " image embeddings.")
     if missing:
-        print(f"Registered in the database but missing on disk: {', '.join(missing)}")
+        print("In the database but missing on disk: " + ", ".join(missing))
 
 
 if __name__ == "__main__":

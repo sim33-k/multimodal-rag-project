@@ -1,9 +1,6 @@
-"""Pydantic request and response models for the API.
-
-Defining these explicitly rather than returning bare dicts is what gives the
-FastAPI /docs page its schemas, which makes the API independently demonstrable
-without the frontend.
-"""
+# Request and response models. FastAPI builds the validation and the /docs page
+# out of these, so the type annotations here are doing real work - don't strip
+# them.
 
 from typing import Any, Literal
 
@@ -15,12 +12,6 @@ Accessibility = Literal["easy", "moderate", "difficult"]
 
 
 class Attraction(BaseModel):
-    """One retrieved attraction.
-
-    The category-specific columns are optional because a beach row carries none of
-    the mountain fields; the retrieval layer strips them before they reach here.
-    """
-
     id: str
     name: str
     category: str
@@ -32,35 +23,34 @@ class Attraction(BaseModel):
     accessibility: str | None = None
     best_season: str | None = None
 
-    # Beach
+    # the category specific ones. all optional because a beach row doesn't have
+    # any of the mountain fields
     activity_type: str | None = None
     water_quality: str | None = None
     surf_break: bool | None = None
-    # Mountain
+
     height_m: float | None = None
     trekking_difficulty: str | None = None
     duration_hours: float | None = None
-    # National park
+
     conservation_status: str | None = None
     habitat: str | None = None
     area_sq_km: float | None = None
     notable_wildlife: str | None = None
-    # Historical site
+
     historical_period: str | None = None
     architectural_style: str | None = None
     unesco_status: str | None = None
 
     images: list[dict[str, Any]] = Field(default_factory=list)
 
-    # Present only on results that came through a vector or fusion retriever.
+    # only set on results that came from a vector search or from fusion
     similarity: float | None = None
     fusion_score: float | None = None
     retrievers: list[str] | None = None
 
 
 class RouteInfo(BaseModel):
-    """How the router classified the query, surfaced so the UI can display it."""
-
     query_type: QueryType
     category: str | None = None
     district: str | None = None
@@ -92,8 +82,7 @@ class SemanticQueryRequest(BaseModel):
 
 
 class ImageQueryRequest(BaseModel):
-    """Text-driven visual search. Uploading a file uses the multipart endpoint."""
-
+    # for the text version. uploading a file uses the multipart endpoint instead
     query: str
     category: Category | None = None
     limit: int = Field(default=10, ge=1, le=50)
@@ -110,12 +99,9 @@ class HybridQueryRequest(BaseModel):
 
 
 class QueryResponse(BaseModel):
-    """Uniform response for all four query types.
-
-    `retrievers_used` and `context` are included so the demo can show the
-    retrieved evidence, not just the final answer.
-    """
-
+    # same shape for all four query types so the frontend only needs one
+    # rendering path. context is included so the demo can show the evidence and
+    # not just the final answer.
     query: str
     query_type: QueryType
     route: RouteInfo | None = None

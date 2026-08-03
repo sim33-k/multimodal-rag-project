@@ -1,10 +1,4 @@
-"""Structured queries: filtered SQL, with full-text search folded in.
-
-When the request carries free-text as well as filters, the SQL result is unioned
-with a tsvector match so a named place is not missed just because it fell outside
-the filter combination. Both are lexical, so no fusion is needed - the SQL result
-leads and full-text tops it up.
-"""
+# Structured queries - SQL filters, plus full text search if a keyword is given.
 
 from fastapi import APIRouter
 
@@ -22,32 +16,28 @@ CATEGORY_PLURALS = {
 }
 
 
-def describe_filters(request: StructuredQueryRequest) -> str:
-    """Phrase the active filters as a question, for when no keyword was typed.
-
-    A structured search is often run entirely from the dropdowns, leaving the
-    keyword box empty. Passing that empty string to the model produces a reply
-    asking the user what they wanted to know, which reads like a broken page. So
-    the filter set is turned back into a sentence and that is what gets answered.
-    """
+def describe_filters(request):
+    # People usually search this tab with the dropdowns and leave the keyword
+    # box empty. Sending an empty query to Gemini makes it reply asking what you
+    # wanted to know, which looks broken, so turn the filters into a sentence
+    # and let it answer that instead.
     subject = CATEGORY_PLURALS.get(request.category, "attractions")
 
     clauses = []
     if request.district:
-        clauses.append(f"in the {request.district} district")
+        clauses.append("in the " + request.district + " district")
     if request.accessibility:
-        clauses.append(f"that are {request.accessibility} to reach")
+        clauses.append("that are " + request.accessibility + " to reach")
     if request.free_entry:
         clauses.append("with free entry")
     if request.unesco_only:
         clauses.append("that are UNESCO listed")
 
-    return f"Tell me about {subject} in Sri Lanka {' '.join(clauses)}".strip()
+    return ("Tell me about " + subject + " in Sri Lanka " + " ".join(clauses)).strip()
 
 
 @router.post("/structured", response_model=QueryResponse)
 def structured_query(request: StructuredQueryRequest) -> QueryResponse:
-    """Filter attractions by category, district, accessibility, fee and UNESCO status."""
     rows = sql_query.structured_search(
         category=request.category,
         district=request.district,
@@ -59,19 +49,28 @@ def structured_query(request: StructuredQueryRequest) -> QueryResponse:
     retrievers = ["sql"]
 
     if request.query.strip():
-        seen = {row["id"] for row in rows}
-        extra = [
-            row
-            for row in fulltext_search.search(request.query, request.limit)
-            if row["id"] not in seen
-        ]
+        # top up the filtered list with keyword matches, so a named place isn't
+        # missed just because it fell outside the filters
+        seen = set()
+        for row in rows:
+            seen.add(row["id"])
+
+        extra = []
+        for row in fulltext_search.search(request.query, request.limit):
+            if row["id"] not in seen:
+                extra.append(row)
+
         if extra:
             rows.extend(extra)
             retrievers.append("fulltext")
-        rows = rows[: request.limit]
+        rows = rows[:request.limit]
+
+    query = request.query.strip()
+    if not query:
+        query = describe_filters(request)
 
     return build_response(
-        query=request.query.strip() or describe_filters(request),
+        query=query,
         query_type="structured",
         rows=rows,
         retrievers_used=retrievers,

@@ -1,9 +1,6 @@
-"""Image queries: visual similarity search over CLIP embeddings.
-
-Two endpoints because the two inputs are shaped differently. An uploaded file has
-to arrive as multipart, while a text phrase is ordinary JSON. Both encode into the
-same CLIP space and hit the same collection.
-"""
+# Image queries. Two endpoints because an uploaded file has to come in as
+# multipart while a text description is just JSON. Both end up in the same CLIP
+# vector space.
 
 import io
 
@@ -21,12 +18,8 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 @router.post("/image", response_model=QueryResponse)
 def image_text_query(request: ImageQueryRequest) -> QueryResponse:
-    """Find attractions that *look* like a described scene.
-
-    Distinct from /query/semantic: this matches the phrase against the photographs
-    themselves, so it can retrieve a place whose written description never uses
-    the words in the query.
-    """
+    # not the same as /query/semantic - this matches the words against the
+    # photos, not against the written descriptions
     rows = image_search.search_by_text(
         query=request.query, limit=request.limit, category=request.category
     )
@@ -47,7 +40,6 @@ async def image_upload_query(
     category: str | None = Form(None),
     generate: bool = Form(True),
 ) -> QueryResponse:
-    """Find attractions visually similar to an uploaded photograph."""
     payload = await file.read()
     if not payload:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
@@ -57,16 +49,15 @@ async def image_upload_query(
     try:
         image = Image.open(io.BytesIO(payload)).convert("RGB")
     except UnidentifiedImageError:
-        raise HTTPException(
-            status_code=400, detail="That file could not be read as an image."
-        )
+        raise HTTPException(status_code=400,
+                            detail="That file could not be read as an image.")
 
     rows = image_search.search_by_image(
         image=image, limit=limit, category=category or None
     )
 
     return build_response(
-        query=f"Uploaded image: {file.filename}",
+        query="Uploaded image: " + str(file.filename),
         query_type="image",
         rows=rows,
         retrievers_used=["image_upload"],

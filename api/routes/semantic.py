@@ -1,4 +1,4 @@
-"""Semantic queries: dense retrieval over the MiniLM description embeddings."""
+# Semantic queries - embedding search over the descriptions.
 
 from fastapi import APIRouter
 
@@ -11,7 +11,6 @@ router = APIRouter()
 
 @router.post("/semantic", response_model=QueryResponse)
 def semantic_query(request: SemanticQueryRequest) -> QueryResponse:
-    """Match a natural-language query against attraction descriptions by meaning."""
     rows = semantic_search.search(
         query=request.query,
         limit=request.limit,

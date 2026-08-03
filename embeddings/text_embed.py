@@ -1,12 +1,10 @@
-"""Text embeddings for semantic search, using sentence-transformers MiniLM.
-
-The document embedded per attraction is the hand-written description joined with
-its name, category and district. Folding those structured fields into the text
-means a query like "ancient city in Matale" can match on the district even though
-the description never spells it out.
-
-Run with:  python -m embeddings.text_embed
-"""
+# Makes the text embeddings for semantic search using MiniLM.
+#
+# We don't embed the description on its own - we stick the name, category and
+# district on the front of it first. Otherwise a search like "beaches in Matara"
+# finds nothing, because the descriptions don't usually mention the district.
+#
+# Run:  python -m embeddings.text_embed
 
 import json
 import sys
@@ -14,30 +12,28 @@ import sys
 from sentence_transformers import SentenceTransformer
 
 from db.connection import PROJECT_ROOT, fetch_all
-from embeddings import TEXT_COLLECTION, get_collection, reset_collection
+from embeddings import TEXT_COLLECTION, reset_collection
 
 MODEL_NAME = "all-MiniLM-L6-v2"
 DESCRIPTIONS_DIR = PROJECT_ROOT / "data" / "descriptions"
 
-_model: SentenceTransformer | None = None
+model = None
 
 
-def get_model() -> SentenceTransformer:
-    """Loaded once per process. The first call downloads ~90MB to the HF cache."""
-    global _model
-    if _model is None:
-        _model = SentenceTransformer(MODEL_NAME)
-    return _model
+def get_model():
+    # loaded once, first time downloads about 90MB
+    global model
+    if model is None:
+        model = SentenceTransformer(MODEL_NAME)
+    return model
 
 
-def embed_query(query: str) -> list[float]:
-    """Encode a user query into the same space as the stored descriptions."""
+def embed_query(query):
     return get_model().encode(query, normalize_embeddings=True).tolist()
 
 
-def load_descriptions() -> dict[str, str]:
-    """Read every descriptions JSON file into an {attraction_id: description} map."""
-    descriptions: dict[str, str] = {}
+def load_descriptions():
+    descriptions = {}
     for path in sorted(DESCRIPTIONS_DIR.glob("*.json")):
         entries = json.loads(path.read_text(encoding="utf-8"))
         for entry in entries:
@@ -45,25 +41,29 @@ def load_descriptions() -> dict[str, str]:
     return descriptions
 
 
-def build_document(row: dict, description: str) -> str:
-    """Combine structured fields with the prose into one embeddable document."""
-    parts = [
-        f"{row['name']}.",
-        f"Category: {row['category'].replace('_', ' ')}.",
-        f"Located in {row['location']}, {row['district']} District, Sri Lanka."
-        if row.get("location")
-        else f"Located in {row['district']} District, Sri Lanka.",
-        f"Best season: {row['best_season']}." if row.get("best_season") else "",
-        f"Accessibility: {row['accessibility']}." if row.get("accessibility") else "",
-        description,
-    ]
-    return " ".join(part for part in parts if part)
+def build_document(row, description):
+    parts = [row["name"] + "."]
+    parts.append("Category: " + row["category"].replace("_", " ") + ".")
+
+    if row.get("location"):
+        parts.append("Located in " + row["location"] + ", " + row["district"] +
+                     " District, Sri Lanka.")
+    else:
+        parts.append("Located in " + row["district"] + " District, Sri Lanka.")
+
+    if row.get("best_season"):
+        parts.append("Best season: " + row["best_season"] + ".")
+    if row.get("accessibility"):
+        parts.append("Accessibility: " + row["accessibility"] + ".")
+
+    parts.append(description)
+    return " ".join(parts)
 
 
-def main() -> None:
+def main():
     descriptions = load_descriptions()
     if not descriptions:
-        print("No description files found under data/descriptions/. Nothing to embed.")
+        print("No description files in data/descriptions/. Nothing to do.")
         return
 
     rows = fetch_all(
@@ -71,13 +71,13 @@ def main() -> None:
         "FROM attractions ORDER BY id"
     )
     if not rows:
-        print("No attractions in the database. Run `python -m db.init_db` first.")
+        print("No attractions in the database. Run python -m db.init_db first.")
         return
 
-    ids: list[str] = []
-    documents: list[str] = []
-    metadatas: list[dict] = []
-    missing: list[str] = []
+    ids = []
+    documents = []
+    metadatas = []
+    missing = []
 
     for row in rows:
         description = descriptions.get(row["id"])
@@ -86,32 +86,27 @@ def main() -> None:
             continue
         ids.append(row["id"])
         documents.append(build_document(row, description))
-        metadatas.append(
-            {
-                "name": row["name"],
-                "category": row["category"],
-                "district": row["district"] or "",
-            }
-        )
+        metadatas.append({
+            "name": row["name"],
+            "category": row["category"],
+            "district": row["district"] or "",
+        })
 
-    print(f"Encoding {len(documents)} descriptions with {MODEL_NAME}...")
-    vectors = get_model().encode(
-        documents, normalize_embeddings=True, show_progress_bar=False
-    )
+    print("Encoding " + str(len(documents)) + " descriptions with " + MODEL_NAME + "...")
+    vectors = get_model().encode(documents, normalize_embeddings=True,
+                                 show_progress_bar=False)
 
-    # Rebuilt from scratch each run so a re-import never leaves stale vectors behind.
     collection = reset_collection(TEXT_COLLECTION)
-
     collection.add(
         ids=ids,
         documents=documents,
         metadatas=metadatas,
-        embeddings=[vector.tolist() for vector in vectors],
+        embeddings=[v.tolist() for v in vectors],
     )
 
-    print(f"Stored {collection.count()} text embeddings in '{TEXT_COLLECTION}'.")
+    print("Stored " + str(collection.count()) + " text embeddings.")
     if missing:
-        print(f"No description written yet for: {', '.join(missing)}")
+        print("No description written yet for: " + ", ".join(missing))
 
 
 if __name__ == "__main__":

@@ -1,16 +1,12 @@
-"""Download attraction images from Wikimedia Commons via the Wikipedia API.
-
-Images are not committed to the repo, so this script rebuilds the image set from
-scratch on a fresh clone. It also writes data/images/IMAGE_SOURCES.md recording
-where every file came from, which is what the report's acknowledgements section
-is built from.
-
-Article titles are looked up in batches of 50, which is the API's limit, because
-issuing one request per attraction gets the client rate-limited very quickly.
-Downloads are then spaced out and retried with backoff on HTTP 429.
-
-Run with:  python -m data.fetch_images
-"""
+# Downloads the attraction photos from Wikimedia through the Wikipedia API and
+# writes down where each one came from, which we need for the acknowledgements
+# in the report.
+#
+# The titles are looked up 50 at a time (the API limit) because doing one
+# request per attraction got us rate limited almost immediately. Downloads are
+# spaced out and retried when we get a 429.
+#
+# Run:  python -m data.fetch_images
 
 import io
 import json
@@ -25,8 +21,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 IMAGE_DIR = PROJECT_ROOT / "data" / "images"
 
 WIKI_API = "https://en.wikipedia.org/w/api.php"
-# Wikimedia's user-agent policy asks automated clients to identify themselves and
-# give a contact address; requests without one are throttled aggressively.
+# wikimedia asks bots to identify themselves, they throttle you harder if you
+# don't
 HEADERS = {
     "User-Agent": "SLTourismRAG/0.1 (SCS 4203 coursework; contact via repository)"
 }
@@ -34,20 +30,19 @@ HEADERS = {
 MAX_EDGE_PX = 1024
 REQUEST_DELAY_S = 2.5
 MAX_RETRIES = 5
+
 TITLE_BATCH_SIZE = 50
 
-# Wikimedia's image CDN answers a burst of downloads with 429 and a Retry-After
-# of ten minutes. Honouring that literally would take hours for a full run, and
-# in practice requests start succeeding again well before it elapses, so the wait
-# is capped and the attempt simply retried.
+# Wikimedia sends back Retry-After: 600 when it throttles the image CDN.
+# Actually waiting 10 minutes each time would take hours, and in practice
+# requests start working again well before that, so cap the wait.
 MAX_BACKOFF_S = 75
 
-# Records which URL each downloaded file came from. Kept on disk so the
-# attribution table survives across partial runs - without it, a resumed run
-# would only know about the files it fetched that time.
+# keeps track of which url each file came from so the attribution table
+# survives between runs
 SOURCES_CACHE = "_sources.json"
 
-# attraction id -> (category folder, Wikipedia article title)
+# attraction id -> (folder, wikipedia article title)
 SOURCES = {
     # Beaches
     "mirissa_beach": ("beaches", "Mirissa"),
@@ -96,40 +91,43 @@ SOURCES = {
 }
 
 
-def request_with_backoff(url: str, params: dict | None = None) -> requests.Response:
-    """GET with exponential backoff, since Wikimedia returns 429 under bursty load."""
+def request_with_backoff(url, params=None):
     delay = 2.0
-    last_error: Exception | None = None
+    last_error = None
 
-    for attempt in range(MAX_RETRIES):
+    attempt = 0
+    while attempt < MAX_RETRIES:
         try:
             response = requests.get(url, params=params, headers=HEADERS, timeout=60)
             if response.status_code == 429:
-                wait = min(float(response.headers.get("Retry-After", delay)), MAX_BACKOFF_S)
-                print(f"    rate limited, waiting {wait:.0f}s")
+                wait = float(response.headers.get("Retry-After", delay))
+                if wait > MAX_BACKOFF_S:
+                    wait = MAX_BACKOFF_S
+                print("    rate limited, waiting " + str(int(wait)) + "s")
                 time.sleep(wait)
                 delay = min(delay * 2, MAX_BACKOFF_S)
+                attempt += 1
                 continue
             response.raise_for_status()
             return response
         except requests.RequestException as error:
             last_error = error
             time.sleep(delay)
-            delay *= 2
+            delay = delay * 2
+            attempt += 1
 
-    raise RuntimeError(f"gave up after {MAX_RETRIES} attempts: {last_error}")
+    raise RuntimeError("gave up after " + str(MAX_RETRIES) + " attempts: " +
+                       str(last_error))
 
 
-def lead_image_urls(titles: list[str]) -> dict[str, str]:
-    """Look up the main image for many articles at once.
+def lead_image_urls(titles):
+    # returns {article title: image url}. the API renames and redirects some
+    # titles so we map them back to what we asked for
+    resolved = {}
 
-    Returns {article title: image url}. Titles the API normalises or redirects are
-    mapped back to what was asked for so the caller can match on its own keys.
-    """
-    resolved: dict[str, str] = {}
-
-    for start in range(0, len(titles), TITLE_BATCH_SIZE):
-        batch = titles[start : start + TITLE_BATCH_SIZE]
+    start = 0
+    while start < len(titles):
+        batch = titles[start:start + TITLE_BATCH_SIZE]
         response = request_with_backoff(
             WIKI_API,
             {
@@ -144,7 +142,6 @@ def lead_image_urls(titles: list[str]) -> dict[str, str]:
         )
         payload = response.json().get("query", {})
 
-        # The API rewrites some titles; follow both hops back to the requested name.
         alias = {}
         for entry in payload.get("normalized", []):
             alias[entry["to"]] = entry["from"]
@@ -157,17 +154,15 @@ def lead_image_urls(titles: list[str]) -> dict[str, str]:
             title = page["title"]
             resolved[alias.get(title, title)] = page["original"]["source"]
 
+        start += TITLE_BATCH_SIZE
         time.sleep(REQUEST_DELAY_S)
 
     return resolved
 
 
-def download_resized(url: str, destination: Path) -> bool:
-    """Fetch an image and save it as a JPEG no larger than MAX_EDGE_PX on its long side.
-
-    Downscaling keeps the repo small and speeds up CLIP encoding; the model resizes
-    to 224x224 internally, so full resolution buys nothing here.
-    """
+def download_resized(url, destination):
+    # shrink to 1024px, CLIP resizes to 224x224 anyway so keeping the full
+    # resolution just makes the repo bigger
     try:
         response = request_with_backoff(url)
         image = Image.open(io.BytesIO(response.content)).convert("RGB")
@@ -176,12 +171,11 @@ def download_resized(url: str, destination: Path) -> bool:
         image.save(destination, "JPEG", quality=88)
         return True
     except Exception as error:
-        print(f"    download failed: {error}")
+        print("    download failed: " + str(error))
         return False
 
 
-def load_sources_cache() -> dict[str, dict[str, str]]:
-    """Attribution recorded by previous runs, keyed by attraction id."""
+def load_sources_cache():
     path = IMAGE_DIR / SOURCES_CACHE
     if not path.exists():
         return {}
@@ -191,25 +185,22 @@ def load_sources_cache() -> dict[str, dict[str, str]]:
         return {}
 
 
-def save_sources_cache(cache: dict[str, dict[str, str]]) -> None:
+def save_sources_cache(cache):
     path = IMAGE_DIR / SOURCES_CACHE
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(cache, indent=2, sort_keys=True), encoding="utf-8")
 
 
-def write_sources_file(cache: dict[str, dict[str, str]]) -> None:
-    """Record provenance for the report's acknowledgements section.
-
-    Built from the full cache rather than only this run's downloads, so stopping
-    and resuming the script does not truncate the attribution table.
-    """
+def write_sources_file(cache):
+    # built from the whole cache, not just this run, so stopping and restarting
+    # doesn't chop the table in half
     if not cache:
         return
 
-    attributions = [
-        (attraction_id, entry["title"], entry["url"])
-        for attraction_id, entry in cache.items()
-    ]
+    attributions = []
+    for attraction_id in cache:
+        entry = cache[attraction_id]
+        attributions.append((attraction_id, entry["title"], entry["url"]))
 
     lines = [
         "# Image sources",
@@ -222,39 +213,39 @@ def write_sources_file(cache: dict[str, dict[str, str]]) -> None:
         "|---|---|---|",
     ]
     for attraction_id, title, url in sorted(attributions):
-        article = f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}"
-        lines.append(f"| `{attraction_id}` | [{title}]({article}) | [file]({url}) |")
+        article = "https://en.wikipedia.org/wiki/" + title.replace(" ", "_")
+        lines.append("| `" + attraction_id + "` | [" + title + "](" + article +
+                     ") | [file](" + url + ") |")
 
     output = IMAGE_DIR / "IMAGE_SOURCES.md"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"Wrote {output.relative_to(PROJECT_ROOT)}")
+    print("Wrote " + str(output.relative_to(PROJECT_ROOT)))
 
 
-def reconcile_cache(cache: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
-    """Fill in attribution for image files that exist but have no cache entry.
+def reconcile_cache(cache):
+    # fills in the source for files that are already on disk but not in the
+    # cache (downloaded before the cache existed, or added by hand). only hits
+    # the article API, which isn't the endpoint that throttles.
+    orphans = {}
+    for attraction_id in SOURCES:
+        folder, title = SOURCES[attraction_id]
+        if (IMAGE_DIR / folder / (attraction_id + ".jpg")).exists() \
+                and attraction_id not in cache:
+            orphans[attraction_id] = title
 
-    Needed for files downloaded before the cache was introduced, and after any
-    manual addition. Only the article API is called, which is not the endpoint
-    that throttles, so this is cheap even for a full set.
-    """
-    orphans = {
-        attraction_id: title
-        for attraction_id, (folder, title) in SOURCES.items()
-        if (IMAGE_DIR / folder / f"{attraction_id}.jpg").exists()
-        and attraction_id not in cache
-    }
     if not orphans:
         return cache
 
-    print(f"Recovering attribution for {len(orphans)} existing files...")
+    print("Recovering attribution for " + str(len(orphans)) + " existing files...")
     try:
         urls = lead_image_urls(list(orphans.values()))
     except Exception as error:
-        print(f"  attribution lookup failed: {error}")
+        print("  attribution lookup failed: " + str(error))
         return cache
 
-    for attraction_id, title in orphans.items():
+    for attraction_id in orphans:
+        title = orphans[attraction_id]
         if title in urls:
             cache[attraction_id] = {"title": title, "url": urls[title]}
 
@@ -262,39 +253,41 @@ def reconcile_cache(cache: dict[str, dict[str, str]]) -> dict[str, dict[str, str
     return cache
 
 
-def main() -> None:
-    pending = {
-        attraction_id: (folder, title)
-        for attraction_id, (folder, title) in SOURCES.items()
-        if not (IMAGE_DIR / folder / f"{attraction_id}.jpg").exists()
-    }
+def main():
+    pending = {}
+    for attraction_id in SOURCES:
+        folder, title = SOURCES[attraction_id]
+        if not (IMAGE_DIR / folder / (attraction_id + ".jpg")).exists():
+            pending[attraction_id] = (folder, title)
+
     already = len(SOURCES) - len(pending)
     if already:
-        print(f"{already} images already downloaded, skipping those.")
+        print(str(already) + " images already downloaded, skipping those.")
     if not pending:
         print("Nothing to fetch.")
         write_sources_file(reconcile_cache(load_sources_cache()))
         return
 
-    print(f"Looking up {len(pending)} article images...")
-    urls = lead_image_urls([title for _, title in pending.values()])
+    print("Looking up " + str(len(pending)) + " article images...")
+    urls = lead_image_urls([title for folder, title in pending.values()])
 
     cache = reconcile_cache(load_sources_cache())
     downloaded = 0
-    failures: list[str] = []
+    failures = []
 
-    for attraction_id, (folder, title) in pending.items():
+    for attraction_id in pending:
+        folder, title = pending[attraction_id]
         url = urls.get(title)
         if not url:
-            print(f"{attraction_id}: no lead image on '{title}'")
+            print(attraction_id + ": no lead image on '" + title + "'")
             failures.append(attraction_id)
             continue
 
-        print(f"{attraction_id}: downloading")
-        destination = IMAGE_DIR / folder / f"{attraction_id}.jpg"
+        print(attraction_id + ": downloading")
+        destination = IMAGE_DIR / folder / (attraction_id + ".jpg")
         if download_resized(url, destination):
             cache[attraction_id] = {"title": title, "url": url}
-            # Saved per file, so a run interrupted halfway keeps what it got.
+            # save after each one so an interrupted run keeps what it got
             save_sources_cache(cache)
             downloaded += 1
         else:
@@ -304,9 +297,11 @@ def main() -> None:
 
     write_sources_file(cache)
 
-    print(f"\nDownloaded {downloaded} images this run, {len(cache)} in total.")
+    print("")
+    print("Downloaded " + str(downloaded) + " images this run, " + str(len(cache)) +
+          " in total.")
     if failures:
-        print(f"Still missing: {', '.join(failures)}")
+        print("Still missing: " + ", ".join(failures))
         print("Re-run to retry, or add files as data/images/<category>/<id>.jpg")
 
 

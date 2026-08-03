@@ -1,11 +1,9 @@
-"""Query router: decide which retrievers to run and extract structured filters.
-
-The primary path asks Gemini to return a JSON object conforming to a fixed
-schema, so intent classification and filter extraction happen in one call and the
-result is parsed rather than pattern-matched. A keyword heuristic stands behind
-it and takes over whenever the API key is missing, the quota is exhausted or the
-response fails to parse, which keeps the system demonstrable offline.
-"""
+# Works out what kind of query the user typed and pulls any filters out of it.
+#
+# Main path asks Gemini for a JSON object matching a fixed schema, so we parse
+# the answer instead of pattern matching the question. If that fails for any
+# reason (no key, quota gone, bad JSON) it falls back to keyword matching, so
+# the app still works offline.
 
 import json
 import os
@@ -39,8 +37,7 @@ IMAGE_HINTS = [
     "image of", "resembl",
 ]
 
-# Response schema for Gemini's structured output mode. Kept deliberately flat -
-# nested objects raise the chance of a malformed response for very little gain.
+# Kept flat on purpose - nested objects made Gemini return broken JSON more often
 RESPONSE_SCHEMA = {
     "type": "object",
     "properties": {
@@ -83,19 +80,14 @@ Districts are Sri Lankan administrative districts, e.g. Matale, Galle, Kandy.
 Query: {query}"""
 
 
-def _model_name() -> str:
-    """Routing deliberately uses a lite model, not the one used for answers.
-
-    Classification into four labels plus a few filters is an easy task that a lite
-    model does just as well, and it carries a much larger free-tier daily quota.
-    The flagship model's allowance is small enough that spending it on routing
-    would exhaust it long before the answers did - and routing runs on every
-    single query.
-    """
+def get_model_name():
+    # A lite model on purpose. Routing is easy and it runs on every single
+    # query, so using the big model here would burn the daily free quota before
+    # any actual answers got generated.
     return os.getenv("GEMINI_ROUTER_MODEL", "gemini-flash-lite-latest")
 
 
-def _blank_route() -> dict:
+def blank_route():
     return {
         "query_type": "hybrid",
         "category": None,
@@ -109,28 +101,28 @@ def _blank_route() -> dict:
     }
 
 
-def _normalise(raw: dict, source: str) -> dict:
-    """Turn a raw route dict into the shape the API layer expects.
+def normalise(raw, source):
+    # turn "any" and "" into None so the filter code can just check truthiness
+    route = blank_route()
 
-    "any" and empty strings are collapsed to None so downstream filter code can
-    simply test truthiness rather than special-casing sentinel values.
-    """
-    route = _blank_route()
-    route.update(
-        {
-            "query_type": raw.get("query_type")
-            if raw.get("query_type") in QUERY_TYPES
-            else "hybrid",
-            "category": raw.get("category") or None,
-            "district": (raw.get("district") or "").strip() or None,
-            "accessibility": raw.get("accessibility") or None,
-            "keywords": (raw.get("keywords") or "").strip(),
-            "free_entry": bool(raw.get("free_entry")),
-            "unesco_only": bool(raw.get("unesco_only")),
-            "reasoning": (raw.get("reasoning") or "").strip(),
-            "source": source,
-        }
-    )
+    query_type = raw.get("query_type")
+    if query_type not in QUERY_TYPES:
+        query_type = "hybrid"
+
+    district = raw.get("district") or ""
+    keywords = raw.get("keywords") or ""
+    reasoning = raw.get("reasoning") or ""
+
+    route["query_type"] = query_type
+    route["category"] = raw.get("category") or None
+    route["district"] = district.strip() or None
+    route["accessibility"] = raw.get("accessibility") or None
+    route["keywords"] = keywords.strip()
+    route["free_entry"] = bool(raw.get("free_entry"))
+    route["unesco_only"] = bool(raw.get("unesco_only"))
+    route["reasoning"] = reasoning.strip()
+    route["source"] = source
+
     if route["category"] == "any":
         route["category"] = None
     if route["accessibility"] == "any":
@@ -138,13 +130,10 @@ def _normalise(raw: dict, source: str) -> dict:
     return route
 
 
-def heuristic_route(query: str, has_image: bool = False) -> dict:
-    """Keyword fallback. Deliberately simple - it only has to be reasonable.
-
-    This is what runs when Gemini is unavailable, so the demo never hard-fails on
-    a network problem. It is not the primary path and is not meant to be.
-    """
-    route = _blank_route()
+def heuristic_route(query, has_image=False):
+    # the fallback. deliberately dumb, it just has to be sensible enough that a
+    # demo still works when the API is down
+    route = blank_route()
     lowered = (query or "").lower()
     route["keywords"] = query or ""
 
@@ -153,8 +142,13 @@ def heuristic_route(query: str, has_image: bool = False) -> dict:
         route["reasoning"] = "An image was uploaded, so visual search is used."
         return route
 
-    for category, words in CATEGORY_KEYWORDS.items():
-        if any(word in lowered for word in words):
+    for category in CATEGORY_KEYWORDS:
+        found = False
+        for word in CATEGORY_KEYWORDS[category]:
+            if word in lowered:
+                found = True
+                break
+        if found:
             route["category"] = category
             break
 
@@ -162,18 +156,28 @@ def heuristic_route(query: str, has_image: bool = False) -> dict:
         route["unesco_only"] = True
     if "free" in lowered:
         route["free_entry"] = True
-    for level in ("easy", "moderate", "difficult"):
+    for level in ["easy", "moderate", "difficult"]:
         if level in lowered:
             route["accessibility"] = level
             break
 
-    # A capitalised word after "in"/"near" is very likely a place name.
+    # a capitalised word after in/near/at is probably a place name
     match = re.search(r"\b(?:in|near|around|at)\s+([A-Z][a-zA-Z]+)", query or "")
     if match:
         route["district"] = match.group(1)
 
-    visual = any(hint in lowered for hint in IMAGE_HINTS)
-    structured = any(hint in lowered for hint in STRUCTURED_HINTS) or route["district"]
+    visual = False
+    for hint in IMAGE_HINTS:
+        if hint in lowered:
+            visual = True
+            break
+
+    structured = route["district"] is not None
+    if not structured:
+        for hint in STRUCTURED_HINTS:
+            if hint in lowered:
+                structured = True
+                break
 
     if visual:
         route["query_type"] = "image"
@@ -191,8 +195,7 @@ def heuristic_route(query: str, has_image: bool = False) -> dict:
     return route
 
 
-def gemini_route(query: str) -> dict | None:
-    """Ask Gemini to classify and extract filters. Returns None on any failure."""
+def gemini_route(query):
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key or api_key == "your_key_here":
         return None
@@ -201,7 +204,7 @@ def gemini_route(query: str) -> dict | None:
         import google.generativeai as genai
 
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(_model_name())
+        model = genai.GenerativeModel(get_model_name())
         response = model.generate_content(
             ROUTER_PROMPT.format(query=query),
             generation_config={
@@ -210,19 +213,20 @@ def gemini_route(query: str) -> dict | None:
                 "temperature": 0.0,
             },
         )
-        return _normalise(json.loads(response.text), "gemini")
+        return normalise(json.loads(response.text), "gemini")
     except Exception as error:
-        # Logged rather than raised: a routing failure should degrade to the
-        # heuristic, not take the whole request down.
-        print(f"[router] Gemini routing unavailable, using heuristic ({error})")
+        # don't blow up the whole request just because routing failed
+        print("[router] Gemini not available, using heuristic (" + str(error) + ")")
         return None
 
 
-def route_query(query: str, has_image: bool = False) -> dict:
-    """Classify a query and extract its filters, Gemini first, heuristic second."""
+def route_query(query, has_image=False):
     if has_image:
         route = heuristic_route(query, has_image=True)
         route["source"] = "rule"
         return route
 
-    return gemini_route(query) or heuristic_route(query)
+    route = gemini_route(query)
+    if route is None:
+        route = heuristic_route(query)
+    return route

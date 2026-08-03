@@ -1,12 +1,9 @@
-"""Create the schema and load the CSVs into Postgres.
-
-The CSVs are kept flat so they stay easy to edit by hand in a spreadsheet. This
-script is what turns each flat row into the normalised form: the shared columns
-go to `attractions`, the category-specific columns go to that category's detail
-table, and any matching files under data/images/ are registered in `images`.
-
-Run with:  python -m db.init_db
-"""
+# Creates the tables and loads the CSVs into them.
+# The CSVs are flat (one row = one attraction) because that's easier to edit in
+# Excel, so this script has to split each row into the main table + the detail
+# table for that category.
+#
+# Run:  python -m db.init_db
 
 import csv
 import sys
@@ -22,7 +19,7 @@ SCHEMA_FILE = Path(__file__).with_name("schema.sql")
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
-# Columns every attraction shares, in the order they appear in the CSVs.
+# columns that every attraction has, in CSV order
 CORE_COLUMNS = [
     "id",
     "name",
@@ -35,9 +32,8 @@ CORE_COLUMNS = [
     "best_season",
 ]
 
-# Maps each CSV to its category value, its detail table, that table's columns,
-# and the image subfolder. Adding a fifth category means adding one entry here
-# plus a detail table in schema.sql - nothing else in the loader changes.
+# One entry per CSV file. If we ever add a 5th category we just add it here and
+# add the table in schema.sql.
 CATEGORIES = {
     "beaches.csv": {
         "category": "beach",
@@ -83,16 +79,18 @@ CATEGORIES = {
 }
 
 
-def _clean(value: str | None) -> str | None:
-    """Blank cells become NULL rather than empty strings."""
+def clean(value):
+    # empty cells should be NULL, not ""
     if value is None:
         return None
     value = value.strip()
-    return value or None
+    if value == "":
+        return None
+    return value
 
 
-def _to_float(value: str | None) -> float | None:
-    value = _clean(value)
+def to_float(value):
+    value = clean(value)
     if value is None:
         return None
     try:
@@ -101,25 +99,25 @@ def _to_float(value: str | None) -> float | None:
         return None
 
 
-def _to_bool(value: str | None) -> bool | None:
-    value = _clean(value)
+def to_bool(value):
+    value = clean(value)
     if value is None:
         return None
-    return value.lower() in {"true", "yes", "1", "y"}
+    return value.lower() in ["true", "yes", "1", "y"]
 
 
-def create_schema() -> None:
-    """Run schema.sql. It drops existing objects first, so this is a full reset."""
+def create_schema():
+    # schema.sql drops everything first, so running this again is a full reset
     sql = SCHEMA_FILE.read_text(encoding="utf-8")
     with get_engine().begin() as conn:
         conn.execute(text(sql))
     print("Schema created.")
 
 
-def load_category(conn, filename: str, config: dict) -> int:
+def load_category(conn, filename, config):
     csv_path = RAW_DIR / filename
     if not csv_path.exists():
-        print(f"  skipping {filename} (not found)")
+        print("  skipping " + filename + " (not found)")
         return 0
 
     with csv_path.open(newline="", encoding="utf-8") as handle:
@@ -138,20 +136,20 @@ def load_category(conn, filename: str, config: dict) -> int:
     )
 
     detail_cols = config["detail_columns"]
+    placeholders = ", ".join(":" + c for c in detail_cols)
     detail_sql = text(
-        f"""
-        INSERT INTO {config['detail_table']}
-            (attraction_id, {', '.join(detail_cols)})
-        VALUES
-            (:attraction_id, {', '.join(f':{c}' for c in detail_cols)})
-        ON CONFLICT (attraction_id) DO NOTHING
-        """
+        "INSERT INTO " + config["detail_table"] +
+        " (attraction_id, " + ", ".join(detail_cols) + ")" +
+        " VALUES (:attraction_id, " + placeholders + ")" +
+        " ON CONFLICT (attraction_id) DO NOTHING"
     )
 
     for row in rows:
-        core = {col: _clean(row.get(col)) for col in CORE_COLUMNS}
-        core["latitude"] = _to_float(row.get("latitude"))
-        core["longitude"] = _to_float(row.get("longitude"))
+        core = {}
+        for col in CORE_COLUMNS:
+            core[col] = clean(row.get(col))
+        core["latitude"] = to_float(row.get("latitude"))
+        core["longitude"] = to_float(row.get("longitude"))
         core["category"] = config["category"]
         conn.execute(core_sql, core)
 
@@ -159,28 +157,24 @@ def load_category(conn, filename: str, config: dict) -> int:
         for col in detail_cols:
             raw = row.get(col)
             if col in config["boolean_columns"]:
-                detail[col] = _to_bool(raw)
+                detail[col] = to_bool(raw)
             elif col in config["numeric_columns"]:
-                detail[col] = _to_float(raw)
+                detail[col] = to_float(raw)
             else:
-                detail[col] = _clean(raw)
+                detail[col] = clean(raw)
         conn.execute(detail_sql, detail)
 
-    print(f"  {filename}: {len(rows)} rows")
+    print("  " + filename + ": " + str(len(rows)) + " rows")
     return len(rows)
 
 
-def load_images(conn) -> int:
-    """Register image files by matching filenames against attraction ids.
+def load_images(conn):
+    # Match image files to attractions by filename, e.g. sigiriya.jpg and
+    # sigiriya_2.jpg both belong to sigiriya.
+    known_ids = set()
+    for row in conn.execute(text("SELECT id FROM attractions")).fetchall():
+        known_ids.add(row[0])
 
-    Convention from the spec: a file is linked to an attraction when its name is
-    the attraction id, optionally followed by a suffix, e.g. sigiriya.jpg and
-    sigiriya_2.jpg both belong to `sigiriya`. Paths are stored relative to the
-    project root so they stay valid on both members' machines.
-    """
-    known_ids = {
-        row[0] for row in conn.execute(text("SELECT id FROM attractions")).fetchall()
-    }
     inserted = 0
 
     for config in CATEGORIES.values():
@@ -193,11 +187,15 @@ def load_images(conn) -> int:
                 continue
 
             stem = image_path.stem
-            # Longest match wins so `little_adams_peak` is not claimed by `adams_peak`.
-            matches = [aid for aid in known_ids if stem == aid or stem.startswith(aid + "_")]
-            if not matches:
-                print(f"  unmatched image (no attraction with that id): {image_path.name}")
+            matches = []
+            for aid in known_ids:
+                if stem == aid or stem.startswith(aid + "_"):
+                    matches.append(aid)
+            if len(matches) == 0:
+                print("  no attraction matches image: " + image_path.name)
                 continue
+            # take the longest match, otherwise little_adams_peak.jpg gets
+            # matched to adams_peak
             attraction_id = max(matches, key=len)
 
             relative = image_path.relative_to(PROJECT_ROOT).as_posix()
@@ -217,23 +215,23 @@ def load_images(conn) -> int:
                     "caption": None,
                 },
             )
-            inserted += 1
+            inserted = inserted + 1
 
-    print(f"  registered {inserted} images")
+    print("  registered " + str(inserted) + " images")
     return inserted
 
 
-def main() -> None:
+def main():
     create_schema()
 
     print("Loading CSVs...")
     total = 0
     with get_engine().begin() as conn:
-        for filename, config in CATEGORIES.items():
-            total += load_category(conn, filename, config)
+        for filename in CATEGORIES:
+            total = total + load_category(conn, filename, CATEGORIES[filename])
         load_images(conn)
 
-    print(f"Done. {total} attractions loaded.")
+    print("Done. " + str(total) + " attractions loaded.")
 
 
 if __name__ == "__main__":

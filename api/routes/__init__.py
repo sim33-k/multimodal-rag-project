@@ -1,10 +1,5 @@
-"""Shared response assembly for the four query routes.
-
-All four follow the same final three steps once retrieval is done: build the LLM
-context from the rows, generate an answer, and package everything into the same
-response shape. Keeping that here means the individual route modules contain only
-their own retrieval strategy.
-"""
+# Shared bit of the four routes. Once retrieval is done they all do the same
+# three things: build the context, generate an answer, package it up.
 
 from functools import lru_cache
 
@@ -14,27 +9,16 @@ from llm.generate import generate_answer
 
 
 @lru_cache(maxsize=1)
-def _descriptions() -> dict[str, str]:
-    """Descriptions are static per process, so read them from disk only once."""
+def get_descriptions():
+    # the json files don't change while the server is running, so read once
     from llm.context_builder import load_descriptions
 
     return load_descriptions()
 
 
-def build_response(
-    query: str,
-    query_type: str,
-    rows: list[dict],
-    retrievers_used: list[str],
-    route: dict | None = None,
-    generate: bool = True,
-) -> QueryResponse:
-    """Assemble the API response, optionally running answer generation.
-
-    `generate` is exposed on every request model so the retrieval layer can be
-    exercised and timed on its own, without an LLM call in the loop.
-    """
-    context = build_context(rows, _descriptions())
+def build_response(query, query_type, rows, retrievers_used, route=None, generate=True):
+    # generate=False skips the LLM call, handy for testing retrieval on its own
+    context = build_context(rows, get_descriptions())
 
     answer = None
     answer_source = None
