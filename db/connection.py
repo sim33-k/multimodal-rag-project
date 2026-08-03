@@ -1,5 +1,4 @@
-# Database connection. Everything that needs the DB imports from here so we only
-# build the engine once.
+# database connection file, everything that need db imports can get it from here. We create a single engine
 
 import os
 from pathlib import Path
@@ -11,13 +10,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 load_dotenv(PROJECT_ROOT / ".env")
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://sltourism_user:devpassword@localhost:5432/sltourism",
-)
+DATABASE_URL = os.getenv("DATABASE_URL","postgresql://sltourism_user:devpassword@localhost:5432/sltourism",)
 
-# pool_pre_ping stops us getting handed a dead connection after the docker
-# container gets restarted, which happened a lot while building this
+
+# we have enabled prool_pre_ping because when sqlalchemy gives a connection from pool it could be dead, so we need to check if its actually alive
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
 
 
@@ -26,8 +22,6 @@ def get_engine():
 
 
 def fetch_all(sql, params=None):
-    # gives back normal dicts so the rest of the code doesn't have to deal with
-    # sqlalchemy Row objects
     if params is None:
         params = {}
 
@@ -43,7 +37,6 @@ def fetch_all(sql, params=None):
 
 
 def ping():
-    # used by /health
     try:
         conn = engine.connect()
         conn.execute(text("SELECT 1"))

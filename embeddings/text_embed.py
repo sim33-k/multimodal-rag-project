@@ -1,17 +1,9 @@
-# Makes the text embeddings for semantic search using MiniLM.
-#
-# We don't embed the description on its own - we stick the name, category and
-# district on the front of it first. Otherwise a search like "beaches in Matara"
-# finds nothing, because the descriptions don't usually mention the district.
-#
-# Run:  python embeddings/text_embed.py
-
+# makes text embeddings for semantic search using MiniLM
 import json
 import sys
 from pathlib import Path
 
-# db and embeddings aren't installed as packages, so add the project root to
-# the path by hand
+# need this so db and embeddings can be imported
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from sentence_transformers import SentenceTransformer
@@ -26,7 +18,6 @@ model = None
 
 
 def embed_query(query):
-    # loaded once, first time downloads about 90MB
     global model
     if model is None:
         model = SentenceTransformer(MODEL_NAME)
@@ -43,10 +34,12 @@ def load_descriptions():
 
 
 if __name__ == "__main__":
+    # description JSONs are keyed by attraction id
     descriptions = load_descriptions()
     if not descriptions:
-        print("No description files in data/descriptions/. Nothing to do.")
+        print("No description files in data/descriptions/.")
     else:
+        # pull the attractions to build documents for
         rows = fetch_all(
             "SELECT id, name, category, location, district, best_season, accessibility "
             "FROM attractions ORDER BY id"
@@ -59,14 +52,14 @@ if __name__ == "__main__":
             metadatas = []
             missing = []
 
+            # build one document per attraction
             for row in rows:
                 description = descriptions.get(row["id"])
                 if not description:
                     missing.append(row["id"])
                     continue
 
-                # stick name, category, location/season/accessibility on the
-                # front of the description so district-only searches still match
+                # add name/category/location info before the description
                 parts = [row["name"] + "."]
                 parts.append("Category: " + row["category"].replace("_", " ") + ".")
 
@@ -99,12 +92,18 @@ if __name__ == "__main__":
             vectors = model.encode(documents, normalize_embeddings=True,
                                     show_progress_bar=False)
 
+            # chroma wants plain lists, not numpy arrays
+            embeddings = []
+            for v in vectors:
+                embeddings.append(v.tolist())
+
+            # wipe and rebuild the collection from scratch each run
             collection = reset_collection(TEXT_COLLECTION)
             collection.add(
                 ids=ids,
                 documents=documents,
                 metadatas=metadatas,
-                embeddings=[v.tolist() for v in vectors],
+                embeddings=embeddings,
             )
 
             print("Stored " + str(collection.count()) + " text embeddings.")

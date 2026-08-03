@@ -1,5 +1,4 @@
-# Turns the rows we got back into the block of text we give to Gemini.
-# Numbered so the answer can point at results by position.
+# turns the rows we got back into the block of text we give to gemini numbered so the answer can point at results by position
 
 MAX_CONTEXT_ITEMS = 8
 MAX_DESCRIPTION_CHARS = 600
@@ -22,19 +21,12 @@ FIELD_LABELS = {
     "unesco_status": "UNESCO status",
 }
 
-# things the model shouldn't see. fusion_score and retrievers get added by the
-# hybrid route for the page, and if they aren't listed here they end up in the
-# prompt looking like facts about the place
-SKIP_FIELDS = [
-    "id", "name", "category", "latitude", "longitude", "images", "similarity",
-    "score", "sources", "ranks", "fusion_score", "retrievers",
-]
+# things the model shouldnt see since fusion_score and retrievers get added by the hybrid route and would look like facts about the place otherwise
+SKIP_FIELDS = ["id", "name", "category", "latitude", "longitude", "images", "similarity", "score", "sources", "ranks", "fusion_score", "retrievers"]
 
 
 def build_context(rows, descriptions=None, max_items=MAX_CONTEXT_ITEMS):
-    # stop after max_items. the results past the top few aren't that relevant
-    # and a long list just makes the model pad the answer out with places nobody
-    # asked about
+    # stop after max_items since a long list just makes the model pad the answer with places nobody asked about
     if not rows:
         return "No matching attractions were found in the database."
 
@@ -46,12 +38,14 @@ def build_context(rows, descriptions=None, max_items=MAX_CONTEXT_ITEMS):
     for row in rows[:max_items]:
         description = descriptions.get(row["id"])
 
+        # underscores look bad in a sentence so swap them for spaces
         category = row.get("category", "")
         category = category.replace("_", " ")
 
         lines = []
         lines.append("[" + str(index) + "] " + row["name"] + " (" + category + ")")
 
+        # one line per remaining field on the row
         for key in row:
             if key in SKIP_FIELDS:
                 continue
@@ -72,6 +66,7 @@ def build_context(rows, descriptions=None, max_items=MAX_CONTEXT_ITEMS):
         if description:
             trimmed = description.strip()
             if len(trimmed) > MAX_DESCRIPTION_CHARS:
+                # cut at the char limit then back off to the last full word
                 trimmed = trimmed[:MAX_DESCRIPTION_CHARS]
                 trimmed = trimmed.rsplit(" ", 1)[0] + "..."
             lines.append("    Description: " + trimmed)
@@ -83,8 +78,7 @@ def build_context(rows, descriptions=None, max_items=MAX_CONTEXT_ITEMS):
 
 
 def load_descriptions():
-    # imported in here so this file doesn't depend on the embeddings package
-    # just to read some json
+    # imported in here so this file doesnt depend on the embeddings package just to read some json
     from embeddings.text_embed import load_descriptions as loader
 
     return loader()

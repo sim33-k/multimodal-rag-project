@@ -1,9 +1,4 @@
-# Keyword search using Postgres full text search.
-#
-# This is here to balance out the embedding search. Embeddings are good at
-# meaning but they blur place names together - searching "Yapahuwa" with
-# embeddings also brings back Hikkaduwa and Yala. A tsvector match doesn't do
-# that, which is why we run both and fuse the results together.
+# keyword search using postgres this balances out embedding search which blurs place names together
 
 from db.connection import fetch_all
 from retrieval.sql_query import attach_images, clean_row
@@ -25,13 +20,11 @@ def search_ids(query, limit=10):
     if query == "":
         return []
 
-    # websearch_to_tsquery needs every word to be there. that is what we want
-    # for something like "Sigiriya", but it finds nothing for a full sentence
-    # like "old rock fortress near Matale".
+    # websearch_to_tsquery needs every word there so full sentences find nothing
     rows = run_query("websearch_to_tsquery", query, limit)
 
     if len(rows) == 0:
-        # so try again with the words OR'd together and let ts_rank order them
+        # try again with the words OR'd together and let ts_rank order them
         words = query.replace(",", " ").split()
         terms = []
         for word in words:

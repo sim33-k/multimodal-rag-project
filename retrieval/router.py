@@ -1,9 +1,5 @@
-# Works out what kind of query the user typed and pulls any filters out of it.
-#
-# Main path asks Gemini for a JSON object matching a fixed schema, so we parse
-# the answer instead of pattern matching the question. If that fails for any
-# reason (no key, quota gone, bad JSON) it falls back to keyword matching, so
-# the app still works offline.
+# works out what kind of query the user typed and pulls filters out of it
+# asks gemini for JSON matching a fixed schema and if that fails falls back to keyword matching so the app still works offline
 
 import json
 import os
@@ -27,17 +23,11 @@ CATEGORY_KEYWORDS = {
     ],
 }
 
-STRUCTURED_HINTS = [
-    "in ", "district", "free", "under", "over", "cheapest", "list", "show me all",
-    "which", "how many", "filter",
-]
+STRUCTURED_HINTS = ["in ", "district", "free", "under", "over", "cheapest", "list", "show me all", "which", "how many", "filter"]
 
-IMAGE_HINTS = [
-    "looks like", "look like", "similar image", "visually", "photo of", "picture of",
-    "image of", "resembl",
-]
+IMAGE_HINTS = ["looks like", "look like", "similar image", "visually", "photo of", "picture of", "image of", "resembl"]
 
-# Kept flat on purpose - nested objects made Gemini return broken JSON more often
+# kept flat on purpose since nested objects made gemini return broken JSON more often
 RESPONSE_SCHEMA = {
     "type": "object",
     "properties": {
@@ -81,9 +71,7 @@ Query: {query}"""
 
 
 def get_model_name():
-    # A lite model on purpose. Routing is easy and it runs on every single
-    # query, so using the big model here would burn the daily free quota before
-    # any actual answers got generated.
+    # lite model on purpose since routing runs on every query and the big model would burn the free quota fast
     return os.getenv("GEMINI_ROUTER_MODEL", "gemini-flash-lite-latest")
 
 
@@ -131,8 +119,7 @@ def normalise(raw, source):
 
 
 def heuristic_route(query, has_image=False):
-    # the fallback. deliberately dumb, it just has to be sensible enough that a
-    # demo still works when the API is down
+    # the fallback deliberately dumb it just has to be good enough for a demo when the API is down
     route = blank_route()
     lowered = (query or "").lower()
     route["keywords"] = query or ""
@@ -215,7 +202,7 @@ def gemini_route(query):
         )
         return normalise(json.loads(response.text), "gemini")
     except Exception as error:
-        # don't blow up the whole request just because routing failed
+        # do not blow up the whole request just because routing failed
         print("[router] Gemini not available, using heuristic (" + str(error) + ")")
         return None
 

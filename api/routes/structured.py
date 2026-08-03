@@ -1,4 +1,4 @@
-# Structured queries - SQL filters, plus full text search if a keyword is given.
+# structured queries just SQL filters plus full text search if a keyword is given
 
 from fastapi import APIRouter
 
@@ -17,10 +17,7 @@ CATEGORY_PLURALS = {
 
 
 def describe_filters(request):
-    # People usually search this tab with the dropdowns and leave the keyword
-    # box empty. Sending an empty query to Gemini makes it reply asking what you
-    # wanted to know, which looks broken, so turn the filters into a sentence
-    # and let it answer that instead.
+    # people usually leave the keyword box empty so turn the filters into a sentence instead of sending gemini nothing
     subject = CATEGORY_PLURALS.get(request.category, "attractions")
 
     clauses = []
@@ -49,8 +46,7 @@ def structured_query(request: StructuredQueryRequest) -> QueryResponse:
     retrievers = ["sql"]
 
     if request.query.strip():
-        # top up the filtered list with keyword matches, so a named place isn't
-        # missed just because it fell outside the filters
+        # top up the filtered list with keyword matches so a named place doesnt get missed
         seen = set()
         for row in rows:
             seen.add(row["id"])

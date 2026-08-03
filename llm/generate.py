@@ -1,12 +1,5 @@
-# Writes the final answer with Gemini, using only the context we retrieved.
-#
-# The prompt tells it to stick to the context and to say when the context
-# doesn't answer the question. That's the whole point here - the answer should
-# come from rows we actually retrieved, not from whatever the model already
-# knows about Sri Lanka.
-#
-# If the API isn't working we put an answer together from the rows ourselves so
-# the rest of the pipeline can still be demoed.
+# writes the final answer with gemini using only the context we retrieved so it cant just make stuff up from what it already knows about sri lanka
+# if the API isnt working we put together an answer from the rows ourselves so the rest of the pipeline can still be demoed
 
 import os
 
@@ -44,8 +37,7 @@ def generate_answer(query, context, rows=None):
         rows = []
 
     if not is_configured():
-        # no LLM, so just describe what we found. it says so at the bottom to
-        # make it obvious this isn't the generated version
+        # no LLM so just describe what we found and say so at the bottom
         if not rows:
             answer = ("No attractions in the database matched that query. Try broadening "
                        "the filters, or rephrasing the question.")
@@ -81,9 +73,7 @@ def generate_answer(query, context, rows=None):
 
     prompt = SYSTEM_PROMPT.format(context=context, query=query)
 
-    # try the good model first then the lite one. the good one only allows about
-    # 20 requests a day on the free tier, so once that runs out the answers get
-    # a bit plainer instead of disappearing
+    # try the good model first then the lite one since the good one only allows about 20 requests a day on the free tier
     model_names = [
         os.getenv("GEMINI_MODEL", "gemini-flash-latest"),
         os.getenv("GEMINI_FALLBACK_MODEL", "gemini-flash-lite-latest"),
@@ -112,12 +102,11 @@ def generate_answer(query, context, rows=None):
                 raise ValueError("empty response")
             return {"answer": text, "source": "gemini", "model": model_name}
         except Exception as error:
-            # normally a 429 once the daily allowance is gone, so try the next
-            # model before giving up on the LLM completely
+            # normally a 429 once the daily allowance is gone so try the next model first
             print("[generate] " + model_name + " not available (" +
                   str(error)[:120] + ")")
 
-    # every model failed, fall back to describing the rows ourselves again
+    # every model failed so fall back to describing the rows ourselves again
     if not rows:
         answer = ("No attractions in the database matched that query. Try broadening "
                    "the filters, or rephrasing the question.")
@@ -144,7 +133,7 @@ def generate_answer(query, context, rows=None):
                 parts.append(row["accessibility"] + " to reach")
             details.append(", ".join(parts) + ".")
 
-        note = ("\n\n(Generated without the language model - no Gemini API key is "
+        note = ("\n\n(Generated without the language model - YOU DONT EVEN HAVE A Gemini API key "
                 "configured, so this summary is composed directly from the retrieved "
                 "database rows.)")
         answer = lead + "\n\n" + " ".join(details) + note

@@ -1,11 +1,9 @@
-# Structured search - filtered SQL against the attractions_full view.
-# The values always go in as bound parameters, never pasted into the string, so
-# anything coming back from the LLM router can't change the query.
+# structured search just filtered SQL on the attractions_full view
+# params always bound we never paste string directly into query
 
 from db.connection import fetch_all
 
-# columns that only belong to one category. the view LEFT JOINs all of them so a
-# beach row comes back with height_m = None etc, and we take those out below
+# these columns only belong to one category other ones just come as None
 CATEGORY_DETAIL_COLUMNS = {
     "beach": ["activity_type", "water_quality", "surf_break"],
     "mountain": ["height_m", "trekking_difficulty", "duration_hours"],
@@ -18,23 +16,11 @@ CATEGORY_DETAIL_COLUMNS = {
     "historical_site": ["historical_period", "architectural_style", "unesco_status"],
 }
 
-CORE_FIELDS = [
-    "id",
-    "name",
-    "category",
-    "location",
-    "district",
-    "latitude",
-    "longitude",
-    "entrance_fee",
-    "accessibility",
-    "best_season",
-]
+CORE_FIELDS = ["id", "name", "category", "location", "district", "latitude", "longitude", "entrance_fee", "accessibility", "best_season"]
 
 
 def clean_row(row):
-    # keep the shared columns plus the ones for this row's category, and throw
-    # away anything that is None
+    # keep the shared columns and whatever this category needs drop None ones
     category = row.get("category")
 
     keep = []
@@ -52,7 +38,7 @@ def clean_row(row):
 
 
 def attach_images(rows):
-    # one query for all the rows instead of one query per row
+    # doing one query for all rows so we dont hit db one time per row
     if not rows:
         return rows
 
@@ -88,8 +74,7 @@ def structured_search(category=None, district=None, accessibility=None,
                       best_season=None, keyword=None, max_height_m=None,
                       min_height_m=None, unesco_only=False, surf_break=None,
                       free_entry=False, limit=10):
-    # only the filters that were actually given get a WHERE clause, so calling
-    # this with nothing gives a general listing instead of nothing at all
+    # WHERE clause only gets whatever filter was actually passed
     clauses = []
     params = {}
     params["limit"] = limit
@@ -98,7 +83,7 @@ def structured_search(category=None, district=None, accessibility=None,
         clauses.append("category = :category")
         params["category"] = category
     if district:
-        # a few districts are stored like "Southern/Uva" so match on contains
+        # some districts stored like "Southern/Uva" so we just match contains
         clauses.append("district ILIKE :district")
         params["district"] = "%" + district + "%"
     if accessibility:
@@ -138,8 +123,7 @@ def structured_search(category=None, district=None, accessibility=None,
 
 
 def get_by_ids(ids):
-    # turns the ids from the vector searches back into full rows, keeping the
-    # order they came in
+    # takes ids we got from vector search and turns them back to full rows keeps same order
     if not ids:
         return []
 
@@ -158,7 +142,7 @@ def get_by_ids(ids):
 
 
 def filter_options():
-    # for the dropdowns. read from the data so they can't go out of date
+    # this is for the dropdowns we read it from data so it dont go out of date
     districts = fetch_all(
         "SELECT DISTINCT district FROM attractions "
         "WHERE district IS NOT NULL ORDER BY district"

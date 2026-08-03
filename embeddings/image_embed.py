@@ -1,16 +1,8 @@
-# Image embeddings using CLIP.
-#
-# CLIP puts pictures and text in the same vector space, which is why the image
-# tab can do both things: upload a photo and find similar photos, or type
-# "golden sand" and match against the photos directly.
-#
-# Run:  python embeddings/image_embed.py
-
+# makes image embeddings using CLIP
 import sys
 from pathlib import Path
 
-# db and embeddings aren't installed as packages, so add the project root to
-# the path by hand
+# need this so db and embeddings can be imported
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import torch
@@ -30,16 +22,14 @@ processor = None
 def embed_images(images):
     global model, processor
     if model is None:
-        # first run downloads about 600MB
         model = CLIPModel.from_pretrained(MODEL_NAME)
         model.eval()
         processor = CLIPProcessor.from_pretrained(MODEL_NAME)
 
-    inputs = processor(images=images, return_tensors="pt")
+    inputs = processor(images=images,return_tensors="pt")
     with torch.no_grad():
         output = model.get_image_features(**inputs)
-        # transformers 4.x gives back a plain tensor here but 5.x gives an
-        # object with the tensor in .pooler_output, so handle both
+        # different transformers versions return this differently
         if isinstance(output, torch.Tensor):
             features = output
         elif getattr(output, "pooler_output", None) is not None:
@@ -48,7 +38,7 @@ def embed_images(images):
             raise TypeError("Unexpected CLIP output: " + type(output).__name__)
 
     # make them unit length so cosine distance works properly
-    features = features / features.norm(dim=-1, keepdim=True)
+    features = features / features.norm(dim=-1,keepdim=True)
     return features.tolist()
 
 
@@ -57,8 +47,7 @@ def embed_image(image):
 
 
 def embed_text(text):
-    # NOTE: this is CLIP's text encoder, not MiniLM. Different vector space,
-    # never compare the two.
+    # this is CLIP's text encoder, not MiniLM. So we get a verry different vector space... cannot compare the two
     global model, processor
     if model is None:
         model = CLIPModel.from_pretrained(MODEL_NAME)
@@ -80,6 +69,7 @@ def embed_text(text):
 
 
 if __name__ == "__main__":
+    # pull every image row along with its attraction info
     rows = fetch_all(
         """
         SELECT i.image_id, i.file_path, i.caption,
@@ -98,15 +88,14 @@ if __name__ == "__main__":
         loaded = []
         missing = []
 
+        # open each image file and build its metadata
         for row in rows:
             path = PROJECT_ROOT / row["file_path"]
             if not path.exists():
                 missing.append(row["file_path"])
                 continue
             loaded.append(Image.open(path).convert("RGB"))
-            # id is the image id not the attraction id, because one attraction
-            # can have more than one photo. attraction_id goes in the metadata
-            # so we can group them back together when searching.
+            # this is the image id, not the attraction id
             ids.append("img_" + str(row["image_id"]))
             metadatas.append({
                 "attraction_id": row["attraction_id"],
@@ -118,10 +107,12 @@ if __name__ == "__main__":
             })
 
         if not loaded:
-            print("No image files found on disk.")
+            print("No image files found on DRIVE!!.")
         else:
             print("Encoding " + str(len(loaded)) + " images with " + MODEL_NAME + "...")
 
+
+            # we are going to do it in small small batch... or else this will take so much memory
             vectors = []
             start = 0
             while start < len(loaded):
@@ -130,14 +121,19 @@ if __name__ == "__main__":
                 start = start + BATCH_SIZE
                 print("  " + str(min(start, len(loaded))) + "/" + str(len(loaded)))
 
+            documents = []
+            for m in metadatas:
+                documents.append(m["name"])
+
+            # store into chroma
             collection = reset_collection(IMAGE_COLLECTION)
             collection.add(
                 ids=ids,
                 metadatas=metadatas,
                 embeddings=vectors,
-                documents=[m["name"] for m in metadatas],
+                documents=documents,
             )
 
             print("Stored " + str(collection.count()) + " image embeddings.")
             if missing:
-                print("In the database but missing on disk: " + ", ".join(missing))
+                print("it is in database but missing in the drive??: " + ", ".join(missing))

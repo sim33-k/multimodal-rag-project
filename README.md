@@ -52,7 +52,26 @@ Detailed write-ups live in [docs/](docs/):
 
 ---
 
+## Prerequisites
+
+- **Docker Desktop** (or Docker Engine + Compose) — runs PostgreSQL, so you don't
+  install Postgres by hand.
+- **Python 3.10+** (the project is developed against 3.13).
+- **Git**, to clone the repo.
+- A free **Gemini API key** from <https://aistudio.google.com/apikey> — optional,
+  see step 3.
+- No GPU required. The embedding models run on CPU; the first run downloads
+  `all-MiniLM-L6-v2` (~90MB) and CLIP ViT-B/32 (~600MB), so have a working
+  internet connection the first time you run the embedding scripts.
+
 ## Installation
+
+### 0. Clone the repository
+
+```bash
+git clone <this-repo-url>
+cd multimodal-rag-project
+```
 
 ### 1. PostgreSQL via Docker
 
@@ -220,6 +239,25 @@ All 40 attractions are text-searchable. `image_collection` is lower because
 Wikimedia rate-limiting left part of the image set undownloaded — this affects the
 image tab only; structured, semantic and hybrid search cover all four categories
 regardless. Re-run `python data/fetch_images.py` to top it up.
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| "Cannot reach the API" in the UI | The server isn't running | `uvicorn api.main:app --reload --port 8000` |
+| `/health` shows `"database": false` | Docker container isn't up | `docker compose up -d`, then check `docker compose ps` |
+| `text_collection: 0` | Text embeddings never built | `python embeddings/text_embed.py` |
+| `image_collection: 0` | Image embeddings never built | `python data/fetch_images.py` then `python embeddings/image_embed.py` |
+| `gemini_configured: false` | No API key set, or `.env` wasn't created | `cp .env.example .env` and add `GEMINI_API_KEY` |
+| First query after startup is very slow | MiniLM and CLIP models load lazily on first use, not at startup | Expected — later queries are fast |
+| `docker compose up -d` fails, port 5432 in use | Another Postgres instance already running | Stop it, or change the port mapping in `docker-compose.yml` and `DATABASE_URL` together |
+| Structured/semantic/hybrid queries return nothing | Schema not initialised or CSVs not loaded | `python db/init_db.py` |
+
+The system is designed to degrade rather than error out — a missing Gemini key
+or an empty collection narrows what a query mode can do, but never crashes the
+API. `/health` is always the fastest way to see what's actually missing.
 
 ---
 

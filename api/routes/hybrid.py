@@ -1,5 +1,4 @@
-# Hybrid queries. Route the question, run whichever retrievers make sense, then
-# merge the ranked lists with RRF.
+# hybrid queries route the question run whichever retrievers make sense then merge the ranked lists with RRF
 
 from fastapi import APIRouter
 
@@ -21,20 +20,16 @@ router = APIRouter()
 def hybrid_query(request: HybridQueryRequest) -> QueryResponse:
     route = query_router.route_query(request.query)
 
-    # if the user picked something in the UI that beats whatever the router
-    # guessed from the sentence
+    # use whatever the user picked in the UI over whatever the router guessed from the sentence
     category = request.category or route.get("category")
     district = request.district or route.get("district")
     accessibility = request.accessibility or route.get("accessibility")
 
-    # grab more than we need from each retriever, fusion works much better with
-    # some overlap between the lists
+    # grab more than we need from each retriever since fusion works much better with some overlap
     fetch_limit = max(request.limit * 2, 10)
     ranked_lists = {}
 
-    semantic_ids = semantic_search.search_ids(
-        request.query, limit=fetch_limit, category=category, district=district
-    )
+    semantic_ids = semantic_search.search_ids(request.query, limit=fetch_limit, category=category, district=district)
     if semantic_ids:
         ranked_lists["semantic"] = semantic_ids
 
@@ -42,28 +37,15 @@ def hybrid_query(request: HybridQueryRequest) -> QueryResponse:
     if fulltext_ids:
         ranked_lists["fulltext"] = fulltext_ids
 
-    # only bother with image search if the router thought appearance mattered,
-    # otherwise it just adds noise
+    # only bother with image search if the router thought appearance mattered otherwise it just adds noise
     if route.get("query_type") in ["image", "hybrid"]:
         image_ids = image_search.search_ids_by_text(request.query, limit=fetch_limit)
         if image_ids:
             ranked_lists["image"] = image_ids
 
-    # The SQL results are used as a filter, NOT as another list to fuse. SQL
-    # comes back ordered by name and RRF can't tell alphabetical order from
-    # relevance order, so whatever sorted first was getting the biggest score
-    # just for starting with an A. Ran this after all the retrievers so the
-    # filter applies to the image results too.
-    has_filters = bool(category or district or accessibility
-                       or route.get("free_entry") or route.get("unesco_only"))
-    structured_rows = sql_query.structured_search(
-        category=category,
-        district=district,
-        accessibility=accessibility,
-        free_entry=route.get("free_entry", False),
-        unesco_only=route.get("unesco_only", False),
-        limit=100,
-    )
+    # SQL results are used as a filter not another list to fuse since SQL comes back sorted by name and RRF would just reward whatever starts with an A
+    has_filters = bool(category or district or accessibility or route.get("free_entry") or route.get("unesco_only"))
+    structured_rows = sql_query.structured_search(category=category, district=district, accessibility=accessibility, free_entry=route.get("free_entry", False), unesco_only=route.get("unesco_only", False), limit=100)
 
     allowed_ids = None
     if has_filters:
@@ -74,11 +56,13 @@ def hybrid_query(request: HybridQueryRequest) -> QueryResponse:
     if allowed_ids is not None:
         filtered = {}
         for name in ranked_lists:
-            kept = [key for key in ranked_lists[name] if key in allowed_ids]
+            kept = []
+            for key in ranked_lists[name]:
+                if key in allowed_ids:
+                    kept.append(key)
             filtered[name] = kept
 
-        # only apply it if something survives - a router that guessed the wrong
-        # district shouldn't empty the whole page
+        # only apply it if something survives so a router that guessed the wrong district doesnt empty the whole page
         anything_left = False
         for name in filtered:
             if filtered[name]:
@@ -86,34 +70,31 @@ def hybrid_query(request: HybridQueryRequest) -> QueryResponse:
                 break
 
         if anything_left:
-            ranked_lists = {n: ids for n, ids in filtered.items() if ids}
+            trimmed = {}
+            for name in filtered:
+                if filtered[name]:
+                    trimmed[name] = filtered[name]
+            ranked_lists = trimmed
         else:
             allowed_ids = None
 
     if not ranked_lists:
-        # nothing ranked anything. if there were filters their result is still a
-        # fine answer (this is the "beaches in Galle" case), otherwise just show
-        # a general listing rather than an empty page
+        # nothing ranked anything so fall back to the structured rows or just a general listing
         rows = structured_rows
         if not rows:
             rows = sql_query.structured_search(limit=request.limit)
         used = []
         if structured_rows:
             used = ["structured"]
-        return build_response(
-            query=request.query,
-            query_type="hybrid",
-            rows=rows[:request.limit],
-            retrievers_used=used,
-            route=route,
-            generate=request.generate,
-        )
+        return build_response(query=request.query, query_type="hybrid", rows=rows[:request.limit], retrievers_used=used, route=route, generate=request.generate)
 
     fused = hybrid_fusion.reciprocal_rank_fusion(ranked_lists, limit=request.limit)
-    rows = sql_query.get_by_ids([entry["id"] for entry in fused])
+    fused_ids = []
+    for entry in fused:
+        fused_ids.append(entry["id"])
+    rows = sql_query.get_by_ids(fused_ids)
 
-    # put the fusion info on the rows so the UI can show which retrievers found
-    # each result
+    # put the fusion info on the rows so the UI can show which retrievers found each result
     scores = {}
     for entry in fused:
         scores[entry["id"]] = entry
@@ -127,11 +108,4 @@ def hybrid_query(request: HybridQueryRequest) -> QueryResponse:
     if allowed_ids is not None:
         retrievers_used.append("structured (filter)")
 
-    return build_response(
-        query=request.query,
-        query_type="hybrid",
-        rows=rows,
-        retrievers_used=retrievers_used,
-        route=route,
-        generate=request.generate,
-    )
+    return build_response(query=request.query, query_type="hybrid", rows=rows, retrievers_used=retrievers_used, route=route, generate=request.generate)

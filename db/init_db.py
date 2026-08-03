@@ -2,7 +2,7 @@ import csv
 import sys
 from pathlib import Path
 
-# db isn't installed as a package, so add the project root to the path by hand
+# python does not know where db.py is. We manually tell python to search the projects root directory for imports
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import text
@@ -15,21 +15,9 @@ SCHEMA_FILE = Path(__file__).with_name("schema.sql")
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
-# columns that every attraction has, in CSV order
-CORE_COLUMNS = [
-    "id",
-    "name",
-    "location",
-    "district",
-    "latitude",
-    "longitude",
-    "entrance_fee",
-    "accessibility",
-    "best_season",
-]
+# attraction columns
+CORE_COLUMNS = ["id","name","location","district","latitude","longitude","entrance_fee","accessibility","best_season",]
 
-# One entry per CSV file. If we ever add a 5th category we just add it here and
-# add the table in schema.sql.
 CATEGORIES = {
     "beaches.csv": {
         "category": "beach",
@@ -74,15 +62,12 @@ CATEGORIES = {
     },
 }
 
-# schema.sql drops everything first, so running this again is a full reset
 sql = SCHEMA_FILE.read_text(encoding="utf-8")
 with get_engine().begin() as conn:
     conn.execute(text(sql))
-print("Schema created.")
+print("Schema is now created.")
 
-print("Loading CSVs...")
 total = 0
-
 with get_engine().begin() as conn:
     for filename in CATEGORIES:
         config = CATEGORIES[filename]
@@ -107,7 +92,10 @@ with get_engine().begin() as conn:
         )
 
         detail_cols = config["detail_columns"]
-        placeholders = ", ".join(":" + c for c in detail_cols)
+        placeholder_list = []
+        for c in detail_cols:
+            placeholder_list.append(":" + c)
+        placeholders = ", ".join(placeholder_list)
         detail_sql = text(
             "INSERT INTO " + config["detail_table"] +
             " (attraction_id, " + ", ".join(detail_cols) + ")" +
@@ -116,7 +104,7 @@ with get_engine().begin() as conn:
         )
 
         for row in rows:
-            # empty cells should be NULL, not ""
+            # empty cells should be will be NULL
             core = {}
             for col in CORE_COLUMNS:
                 value = row.get(col)
@@ -162,8 +150,7 @@ with get_engine().begin() as conn:
         total = total + len(rows)
         print("  " + filename + ": " + str(len(rows)) + " rows")
 
-    # Match image files to attractions by filename, e.g. sigiriya.jpg and
-    # sigiriya_2.jpg both belong to sigiriya.
+    # Matching image files to attractions by filename
     known_ids = set()
     for row in conn.execute(text("SELECT id FROM attractions")).fetchall():
         known_ids.add(row[0])
@@ -187,8 +174,7 @@ with get_engine().begin() as conn:
             if len(matches) == 0:
                 print("  no attraction matches image: " + image_path.name)
                 continue
-            # take the longest match, otherwise little_adams_peak.jpg gets
-            # matched to adams_peak
+            # taking the longest match
             attraction_id = max(matches, key=len)
 
             relative = image_path.relative_to(PROJECT_ROOT).as_posix()
@@ -210,6 +196,6 @@ with get_engine().begin() as conn:
             )
             inserted = inserted + 1
 
-    print("  registered " + str(inserted) + " images")
+    print("  reg " + str(inserted) + " images")
 
-print("Done. " + str(total) + " attractions loaded.")
+print("Done. " + str(total) + " attractions are now loaded!!!!")

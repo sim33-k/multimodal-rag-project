@@ -1,6 +1,4 @@
-# Request and response models. FastAPI builds the validation and the /docs page
-# out of these, so the type annotations here are doing real work - don't strip
-# them.
+# request and response models fastapi builds the validation and the /docs page out of these so dont strip the type annotations
 
 from typing import Any, Literal
 
@@ -23,8 +21,7 @@ class Attraction(BaseModel):
     accessibility: str | None = None
     best_season: str | None = None
 
-    # the category specific ones. all optional because a beach row doesn't have
-    # any of the mountain fields
+    # category specific ones all optional since a beach row doesnt have any mountain fields
     activity_type: str | None = None
     water_quality: str | None = None
     surf_break: bool | None = None
@@ -99,9 +96,7 @@ class HybridQueryRequest(BaseModel):
 
 
 class QueryResponse(BaseModel):
-    # same shape for all four query types so the frontend only needs one
-    # rendering path. context is included so the demo can show the evidence and
-    # not just the final answer.
+    # same shape for all four query types so frontend only needs one rendering path
     query: str
     query_type: QueryType
     route: RouteInfo | None = None

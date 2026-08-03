@@ -1,4 +1,4 @@
-# Semantic queries - embedding search over the descriptions.
+# semantic queries just embedding search over the descriptions
 
 from fastapi import APIRouter
 
@@ -11,17 +11,7 @@ router = APIRouter()
 
 @router.post("/semantic", response_model=QueryResponse)
 def semantic_query(request: SemanticQueryRequest) -> QueryResponse:
-    rows = semantic_search.search(
-        query=request.query,
-        limit=request.limit,
-        category=request.category,
-        district=request.district,
-    )
+    rows = semantic_search.search(query=request.query,limit=request.limit,category=request.category,district=request.district,)
 
-    return build_response(
-        query=request.query,
-        query_type="semantic",
-        rows=rows,
-        retrievers_used=["semantic"],
-        generate=request.generate,
-    )
+    return build_response(query=request.query,query_type="semantic",
+rows=rows,retrievers_used=["semantic"],generate=request.generate,)
