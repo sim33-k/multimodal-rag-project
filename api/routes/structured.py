@@ -14,6 +14,36 @@ from retrieval import fulltext_search, sql_query
 
 router = APIRouter()
 
+CATEGORY_PLURALS = {
+    "beach": "beaches",
+    "mountain": "mountains",
+    "national_park": "national parks",
+    "historical_site": "historical sites",
+}
+
+
+def describe_filters(request: StructuredQueryRequest) -> str:
+    """Phrase the active filters as a question, for when no keyword was typed.
+
+    A structured search is often run entirely from the dropdowns, leaving the
+    keyword box empty. Passing that empty string to the model produces a reply
+    asking the user what they wanted to know, which reads like a broken page. So
+    the filter set is turned back into a sentence and that is what gets answered.
+    """
+    subject = CATEGORY_PLURALS.get(request.category, "attractions")
+
+    clauses = []
+    if request.district:
+        clauses.append(f"in the {request.district} district")
+    if request.accessibility:
+        clauses.append(f"that are {request.accessibility} to reach")
+    if request.free_entry:
+        clauses.append("with free entry")
+    if request.unesco_only:
+        clauses.append("that are UNESCO listed")
+
+    return f"Tell me about {subject} in Sri Lanka {' '.join(clauses)}".strip()
+
 
 @router.post("/structured", response_model=QueryResponse)
 def structured_query(request: StructuredQueryRequest) -> QueryResponse:
@@ -41,7 +71,7 @@ def structured_query(request: StructuredQueryRequest) -> QueryResponse:
         rows = rows[: request.limit]
 
     return build_response(
-        query=request.query,
+        query=request.query.strip() or describe_filters(request),
         query_type="structured",
         rows=rows,
         retrievers_used=retrievers,

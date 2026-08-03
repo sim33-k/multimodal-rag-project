@@ -9,7 +9,6 @@
 <body>
 
 <h1>Sri Lanka Tourism Search</h1>
-<p id="status" class="status">Checking API...</p>
 
 <div class="tabs">
   <button class="tab active" data-tab="structured">Structured</button>
@@ -19,8 +18,6 @@
 </div>
 
 <div class="tabbody active" id="tab-structured">
-  <p class="note">SQL filters over the attractions_full view. Adds Postgres
-     full-text search if a keyword is given.</p>
   <input type="text" id="q-structured" placeholder="Keyword (optional)">
   <button data-run="structured">Search</button>
   <label><input type="checkbox" id="free"> Free entry only</label>
@@ -28,15 +25,11 @@
 </div>
 
 <div class="tabbody" id="tab-semantic">
-  <p class="note">Matches your wording against the descriptions by meaning,
-     using MiniLM embeddings.</p>
   <input type="text" id="q-semantic" placeholder="e.g. a rainforest full of birds found nowhere else">
   <button data-run="semantic">Search</button>
 </div>
 
 <div class="tabbody" id="tab-image">
-  <p class="note">CLIP image search. Upload a photo, or describe what a place
-     looks like and match against the photos themselves.</p>
   <input type="file" id="file" accept="image/jpeg,image/png,image/webp">
   <button data-run="image-upload">Find similar</button>
   <img id="preview" hidden alt="">
@@ -46,8 +39,6 @@
 </div>
 
 <div class="tabbody" id="tab-hybrid">
-  <p class="note">Gemini classifies the query and pulls out filters, then the
-     retrievers that apply are run and merged with Reciprocal Rank Fusion.</p>
   <input type="text" id="q-hybrid" placeholder="e.g. which UNESCO sites in Matale are worth a day trip?">
   <button data-run="hybrid">Ask</button>
 </div>

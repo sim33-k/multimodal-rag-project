@@ -162,6 +162,10 @@ function show(data) {
     showCards(rows);
     showMap(rows);
     $("context").textContent = data.context || "";
+
+    // Results sit below the form, so on a short window nothing appears to happen
+    // when you press Search unless the page is moved down to them.
+    $("results").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 // --- searching ---
@@ -230,6 +234,7 @@ async function run(kind) {
         $("error").textContent = e instanceof TypeError
             ? "Cannot reach the API. Start it with: uvicorn api.main:app --port 8000"
             : e.message;
+        $("error").scrollIntoView({ behavior: "smooth", block: "center" });
     } finally {
         busy(false);
     }
@@ -256,17 +261,23 @@ async function loadFilters() {
     }
 }
 
-async function loadStatus() {
+// Only says anything when something is actually wrong. Without this a missing
+// database or an empty collection just looks like a search that found nothing.
+async function checkHealth() {
+    let health;
     try {
-        const h = await (await fetch(API + "/health")).json();
-        $("status").textContent =
-            "Database " + (h.database ? "connected" : "unavailable") +
-            " | " + h.text_collection + " text vectors" +
-            " | " + h.image_collection + " image vectors" +
-            " | Gemini " + (h.gemini_configured ? "configured" : "not configured");
+        health = await (await fetch(API + "/health")).json();
     } catch {
-        $("status").textContent = "API unreachable on port 8000.";
+        return warn("Cannot reach the API on port 8000.");
     }
+    if (!health.database) return warn("Database unavailable. Is Docker running?");
+    if (!health.text_collection) return warn("No text embeddings. Run: python -m embeddings.text_embed");
+    if (!health.image_collection) return warn("No image embeddings. Run: python -m embeddings.image_embed");
+}
+
+function warn(message) {
+    $("error").hidden = false;
+    $("error").textContent = message;
 }
 
 document.querySelectorAll(".tab").forEach((tab) => {
@@ -295,4 +306,4 @@ $("file").onchange = (e) => {
 };
 
 loadFilters();
-loadStatus();
+checkHealth();
