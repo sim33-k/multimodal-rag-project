@@ -28,8 +28,12 @@ FIELD_LABELS = {
     "unesco_status": "UNESCO status",
 }
 
+# Anything the retrieval layer attached for the UI's benefit rather than the
+# model's. fusion_score and retrievers in particular are set per row by the hybrid
+# route, and without them listed here they reach the prompt looking like facts
+# about the place: "Fusion score: 0.032787" alongside its entrance fee.
 SKIP_FIELDS = {"id", "name", "category", "latitude", "longitude", "images", "similarity",
-               "score", "sources", "ranks"}
+               "score", "sources", "ranks", "fusion_score", "retrievers"}
 
 
 def _format_row(index: int, row: dict, description: str | None) -> str:
