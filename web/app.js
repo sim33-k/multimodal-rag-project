@@ -1,190 +1,125 @@
-/* Sri Lanka Tourism Explorer - frontend logic.
- *
- * Plain JavaScript, no framework and no external libraries. Like the Streamlit
- * client, this only ever talks to the FastAPI backend over HTTP; it holds no
- * query logic of its own and never reaches the database or ChromaDB.
- *
- * The page is served by the API itself at /ui, so requests are same-origin and
- * API_BASE is empty. Set it to e.g. "http://localhost:8000" if you instead open
- * index.html straight from disk - CORS on the API is permissive enough to allow
- * that during development. */
+// Talks to the FastAPI backend only. Served from /ui by the API itself, so
+// requests are same-origin and the base URL is empty.
 
-const API_BASE = "";
+const API = "";
 
-const $ = (selector) => document.querySelector(selector);
+const $ = (id) => document.getElementById(id);
 
-const CATEGORY_LABELS = {
-    beach: "Beach",
-    mountain: "Mountain",
-    national_park: "National Park",
-    historical_site: "Historical Site",
+const LABELS = {
+    beach: "beach",
+    mountain: "mountain",
+    national_park: "national park",
+    historical_site: "historical site",
 };
 
-const CATEGORY_COLOURS = {
-    beach: "#14A0A0",
-    mountain: "#073B3A",
-    national_park: "#4C8C4A",
-    historical_site: "#C75B39",
+const COLOURS = {
+    beach: "#14a0a0",
+    mountain: "#073b3a",
+    national_park: "#4c8c4a",
+    historical_site: "#c75b39",
 };
 
-/* Which detail fields to show per category, and how to label them. Anything not
- * listed stays off the card so it remains readable. */
-const CARD_FIELDS = {
+// which extra fields to show per category
+const FIELDS = {
     beach: [["activity_type", "Activities"], ["water_quality", "Water"]],
     mountain: [["height_m", "Height"], ["trekking_difficulty", "Trek"]],
     national_park: [["area_sq_km", "Area"], ["notable_wildlife", "Wildlife"]],
     historical_site: [["historical_period", "Period"], ["unesco_status", "UNESCO"]],
 };
 
-/* ------------------------------------------------------------------ helpers */
-
-function escapeHtml(value) {
-    return String(value ?? "").replace(/[&<>"']/g, (character) => ({
-        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[character]));
+function esc(v) {
+    return String(v ?? "").replace(/[&<>"]/g, (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
 
-function imageUrl(filePath) {
-    // Stored as data/images/<category>/<file>; the API serves it from /images.
-    const relative = filePath.replace("data/images/", "").replace(/\\/g, "/");
-    return `${API_BASE}/images/${relative}`;
-}
-
-function filters() {
+function opts() {
     return {
-        category: $("#f-category").value || null,
-        district: $("#f-district").value || null,
-        accessibility: $("#f-accessibility").value || null,
-        limit: Number($("#f-limit").value),
-        generate: $("#f-generate").checked,
+        category: $("category").value || null,
+        district: $("district").value || null,
+        accessibility: $("accessibility").value || null,
+        limit: Number($("limit").value) || 6,
+        generate: $("generate").checked,
     };
 }
 
-function setLoading(isLoading, message) {
-    $("#loading").hidden = !isLoading;
-    $("#loading-text").textContent = message || "Searching…";
-    document.querySelectorAll(".btn").forEach((button) => {
-        button.disabled = isLoading;
-    });
+function busy(on) {
+    $("loading").hidden = !on;
+    document.querySelectorAll("button[data-run]").forEach((b) => (b.disabled = on));
 }
 
-function showError(message) {
-    $("#error").hidden = false;
-    $("#error").textContent = message;
-    $("#results").hidden = true;
-}
-
-async function callApi(path, body) {
-    const response = await fetch(`${API_BASE}${path}`, {
+async function post(path, body) {
+    const r = await fetch(API + path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
     });
-    if (!response.ok) {
-        throw new Error(`API returned ${response.status}: ${await response.text()}`);
-    }
-    return response.json();
+    if (!r.ok) throw new Error("API returned " + r.status + ": " + (await r.text()));
+    return r.json();
 }
 
-/* -------------------------------------------------------------- rendering */
+// --- rendering ---
 
-function renderAnswer(answer, source) {
-    if (!answer) { $("#answer").innerHTML = ""; return; }
+function showAnswer(text, source) {
+    if (!text) {
+        $("answer").innerHTML = "";
+        return;
+    }
     const label = source === "gemini" ? "Generated answer" : "Answer (retrieval only)";
-    const paragraphs = answer.trim().split(/\n\n+/)
-        .map((p) => `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`).join("");
-    $("#answer").innerHTML =
-        `<div class="answer"><div class="label">${label}</div>${paragraphs}</div>`;
+    const body = text.trim().split(/\n\n+/)
+        .map((p) => "<p>" + esc(p).replace(/\n/g, "<br>") + "</p>").join("");
+    $("answer").innerHTML =
+        '<div class="answer"><div class="label">' + label + "</div>" + body + "</div>";
 }
 
-function renderRoute(payload) {
+function showRoute(data) {
+    const bits = [];
+    if (data.route) {
+        bits.push("Routed as " + esc(data.route.query_type) + " (" + esc(data.route.source) + ")");
+        if (data.route.reasoning) bits.push(esc(data.route.reasoning));
+    }
+    if (data.retrievers_used && data.retrievers_used.length) {
+        bits.push("Retrievers: " + esc(data.retrievers_used.join(", ")));
+    }
+    $("route").innerHTML = bits.join(" &middot; ");
+}
+
+function factLine(row) {
     const parts = [];
-    const route = payload.route;
-    if (route) {
-        parts.push(`Router classified this as <strong>${escapeHtml(route.query_type)}</strong>`
-                   + ` (via ${escapeHtml(route.source)})`);
-        if (route.reasoning) parts.push(escapeHtml(route.reasoning));
+    if (row.entrance_fee) parts.push("Entry " + esc(row.entrance_fee));
+    if (row.best_season) parts.push("Season " + esc(row.best_season));
+
+    for (const [key, label] of FIELDS[row.category] || []) {
+        let v = row[key];
+        if (v == null || v === "") continue;
+        if (key === "height_m") v = Math.round(v) + " m";
+        if (key === "area_sq_km") v = Math.round(v) + " km2";
+        parts.push(label + " " + esc(v));
     }
-    const used = payload.retrievers_used || [];
-    if (used.length) {
-        parts.push(`Retrievers run: <strong>${escapeHtml(used.join(", "))}</strong>`);
-    }
-    $("#route").innerHTML = parts.join(" &middot; ");
+    if (row.similarity != null) parts.push("similarity " + row.similarity.toFixed(3));
+    if (row.retrievers) parts.push("matched by " + esc(row.retrievers.join(" + ")));
+
+    return parts.join(" &middot; ");
 }
 
-function chips(row) {
-    const out = [`<span class="chip">${CATEGORY_LABELS[row.category] || row.category}</span>`];
-    if (row.district) out.push(`<span class="chip">${escapeHtml(row.district)}</span>`);
-    if (row.accessibility) out.push(`<span class="chip">${escapeHtml(row.accessibility)}</span>`);
-    if (row.similarity != null) {
-        out.push(`<span class="chip accent">similarity ${row.similarity.toFixed(3)}</span>`);
-    }
-    if (row.retrievers && row.retrievers.length) {
-        out.push(`<span class="chip accent">matched by ${escapeHtml(row.retrievers.join(" + "))}</span>`);
-    }
-    return out.join("");
-}
-
-function facts(row) {
-    const parts = [];
-    if (row.entrance_fee) parts.push(`<b>Entry</b> ${escapeHtml(row.entrance_fee)}`);
-    if (row.best_season) parts.push(`<b>Season</b> ${escapeHtml(row.best_season)}`);
-
-    for (const [field, label] of CARD_FIELDS[row.category] || []) {
-        let value = row[field];
-        if (value == null || value === "") continue;
-        if (field === "height_m") value = `${Math.round(value).toLocaleString()} m`;
-        if (field === "area_sq_km") value = `${Math.round(value).toLocaleString()} km²`;
-        parts.push(`<b>${label}</b> ${escapeHtml(value)}`);
-    }
-    return parts.join(" &nbsp;·&nbsp; ");
-}
-
-function renderCards(rows) {
-    $("#cards").innerHTML = rows.map((row) => {
-        const image = (row.images || [])[0];
-        const thumbnail = image
-            ? `<img src="${imageUrl(image.file_path)}" alt="${escapeHtml(row.name)}" loading="lazy">`
+function showCards(rows) {
+    $("cards").innerHTML = rows.map((row) => {
+        const img = (row.images || [])[0];
+        const thumb = img
+            ? '<img src="' + API + "/images/" + img.file_path.replace("data/images/", "") +
+              '" alt="">'
             : "";
-        return `
-        <article class="card${image ? "" : " no-image"}">
-            ${thumbnail}
-            <div>
-                <h3>${escapeHtml(row.name)}</h3>
-                <div class="sub">${escapeHtml(row.location || "")}</div>
-                <div>${chips(row)}</div>
-                <div class="facts">${facts(row)}</div>
-            </div>
-        </article>`;
+        const place = [row.location, row.district].filter(Boolean).join(", ");
+        return "<li>" + thumb +
+            "<h3>" + esc(row.name) + "</h3>" +
+            ' <span class="meta">(' + (LABELS[row.category] || row.category) +
+            (place ? ", " + esc(place) : "") + ")</span>" +
+            '<div class="facts">' + factLine(row) + "</div></li>";
     }).join("");
 }
 
-function renderGallery(rows, show) {
-    const gallery = $("#gallery");
-    if (!show) { gallery.hidden = true; return; }
-
-    const tiles = rows.flatMap((row) =>
-        (row.images || []).map((image) => ({ row, image })));
-
-    if (!tiles.length) { gallery.hidden = true; return; }
-
-    gallery.hidden = false;
-    gallery.innerHTML = tiles.map(({ row, image }) => {
-        const score = row.similarity != null ? ` · ${row.similarity.toFixed(3)}` : "";
-        return `<figure>
-            <img src="${imageUrl(image.file_path)}" alt="${escapeHtml(row.name)}" loading="lazy">
-            <figcaption>${escapeHtml(row.name)}${score}</figcaption>
-        </figure>`;
-    }).join("");
-}
-
-/* ------------------------------------------------------------------- map */
-
-/* Simplified coastline as [latitude, longitude] pairs. Schematic rather than
- * survey-accurate - it exists to give the plotted points a recognisable frame,
- * which is all a result map needs. Drawn with the same projection as the pins so
- * the two always line up. */
-const COASTLINE = [
+// Simplified coastline, as [lat, lon]. Drawn with the same projection as the
+// pins so they line up.
+const COAST = [
     [9.82, 80.20], [9.70, 80.05], [9.35, 79.85], [8.95, 79.70], [8.55, 79.72],
     [8.20, 79.72], [7.70, 79.80], [7.20, 79.83], [6.70, 79.88], [6.30, 80.00],
     [6.05, 80.15], [5.95, 80.45], [5.92, 80.75], [6.05, 81.10], [6.25, 81.35],
@@ -192,233 +127,172 @@ const COASTLINE = [
     [8.60, 81.20], [9.00, 80.95], [9.35, 80.70], [9.60, 80.45],
 ];
 
-const BOUNDS = { minLat: 5.85, maxLat: 9.90, minLon: 79.60, maxLon: 82.00 };
-const MAP_SIZE = { width: 260, height: 420 };
-
-function project(latitude, longitude) {
-    // Equirectangular. Over an area this small the distortion is not visible.
-    const x = (longitude - BOUNDS.minLon) / (BOUNDS.maxLon - BOUNDS.minLon) * MAP_SIZE.width;
-    const y = (BOUNDS.maxLat - latitude) / (BOUNDS.maxLat - BOUNDS.minLat) * MAP_SIZE.height;
-    return [x, y];
+function project(lat, lon) {
+    return [
+        (lon - 79.6) / 2.4 * 240,
+        (9.9 - lat) / 4.05 * 390,
+    ];
 }
 
-function renderMap(rows) {
-    const outline = COASTLINE
-        .map(([lat, lon]) => project(lat, lon).map((n) => n.toFixed(1)).join(","))
-        .join(" ");
+function showMap(rows) {
+    const outline = COAST.map(([la, lo]) =>
+        project(la, lo).map((n) => n.toFixed(1)).join(",")).join(" ");
 
-    const pins = rows
-        .filter((row) => row.latitude != null && row.longitude != null)
-        .map((row) => {
-            const [x, y] = project(row.latitude, row.longitude);
-            const colour = CATEGORY_COLOURS[row.category] || "#777";
-            return `<circle class="pin" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5"
-                        fill="${colour}"><title>${escapeHtml(row.name)}</title></circle>`;
+    const pins = rows.filter((r) => r.latitude != null && r.longitude != null)
+        .map((r) => {
+            const [x, y] = project(r.latitude, r.longitude);
+            return '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) +
+                '" r="4" fill="' + (COLOURS[r.category] || "#777") +
+                '" stroke="#fff"><title>' + esc(r.name) + "</title></circle>";
         }).join("");
 
-    $("#map").innerHTML =
-        `<polygon class="island" points="${outline}"></polygon>${pins}`;
+    $("map").innerHTML = '<polygon class="island" points="' + outline + '"/>' + pins;
 }
 
-/* --------------------------------------------------------------- results */
+function show(data) {
+    $("error").hidden = true;
+    $("results").hidden = false;
 
-function renderResults(payload, options = {}) {
-    $("#error").hidden = true;
-    $("#results").hidden = false;
+    showAnswer(data.answer, data.answer_source);
+    showRoute(data);
 
-    renderAnswer(payload.answer, payload.answer_source);
-    renderRoute(payload);
+    const rows = data.results || [];
+    $("count").textContent = rows.length + (rows.length === 1 ? " result" : " results");
 
-    const rows = payload.results || [];
-    $("#result-count").textContent =
-        `${rows.length} result${rows.length === 1 ? "" : "s"}`;
-
-    if (!rows.length) {
-        $("#cards").innerHTML =
-            `<p class="empty">Nothing matched. Try relaxing the filters or rephrasing.</p>`;
-        $("#gallery").hidden = true;
-        $("#map").innerHTML = "";
-    } else {
-        renderGallery(rows, options.gallery);
-        renderCards(rows);
-        renderMap(rows);
-    }
-
-    $("#context").textContent = payload.context || "";
-    $("#results").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    showCards(rows);
+    showMap(rows);
+    $("context").textContent = data.context || "";
 }
 
-/* --------------------------------------------------------------- searches */
+// --- searching ---
 
-async function runSearch(kind) {
-    const state = filters();
-    setLoading(true, {
-        structured: "Querying the database…",
-        semantic: "Embedding the query and searching…",
-        image: "Matching against image embeddings…",
-        "image-upload": "Encoding the image with CLIP…",
-        hybrid: "Routing, retrieving and fusing results…",
-    }[kind]);
+async function run(kind) {
+    const o = opts();
+    busy(true);
 
     try {
-        let payload;
+        let data;
 
         if (kind === "structured") {
-            payload = await callApi("/query/structured", {
-                query: $("#q-structured").value,
-                category: state.category,
-                district: state.district,
-                accessibility: state.accessibility,
-                free_entry: $("#f-free").checked,
-                unesco_only: $("#f-unesco").checked,
-                limit: state.limit,
-                generate: state.generate,
+            data = await post("/query/structured", {
+                query: $("q-structured").value,
+                category: o.category,
+                district: o.district,
+                accessibility: o.accessibility,
+                free_entry: $("free").checked,
+                unesco_only: $("unesco").checked,
+                limit: o.limit,
+                generate: o.generate,
             });
 
         } else if (kind === "semantic") {
-            const query = $("#q-semantic").value.trim();
-            if (!query) throw new Error("Enter a query first.");
-            payload = await callApi("/query/semantic", {
-                query,
-                category: state.category,
-                district: state.district,
-                limit: state.limit,
-                generate: state.generate,
+            const q = $("q-semantic").value.trim();
+            if (!q) throw new Error("Type a query first.");
+            data = await post("/query/semantic", {
+                query: q, category: o.category, district: o.district,
+                limit: o.limit, generate: o.generate,
             });
 
         } else if (kind === "image") {
-            const query = $("#q-image").value.trim();
-            if (!query) throw new Error("Describe what you are looking for first.");
-            payload = await callApi("/query/image", {
-                query,
-                category: state.category,
-                limit: state.limit,
-                generate: state.generate,
+            const q = $("q-image").value.trim();
+            if (!q) throw new Error("Describe what you are looking for first.");
+            data = await post("/query/image", {
+                query: q, category: o.category, limit: o.limit, generate: o.generate,
             });
 
         } else if (kind === "image-upload") {
-            const file = $("#q-file").files[0];
+            const file = $("file").files[0];
             if (!file) throw new Error("Choose an image first.");
-            // Multipart rather than JSON, since this one carries a file.
             const form = new FormData();
             form.append("file", file);
-            form.append("limit", String(state.limit));
-            form.append("category", state.category || "");
-            form.append("generate", String(state.generate));
+            form.append("limit", o.limit);
+            form.append("category", o.category || "");
+            form.append("generate", o.generate);
+            const r = await fetch(API + "/query/image/upload", { method: "POST", body: form });
+            if (!r.ok) throw new Error("API returned " + r.status);
+            data = await r.json();
 
-            const response = await fetch(`${API_BASE}/query/image/upload`, {
-                method: "POST", body: form,
-            });
-            if (!response.ok) {
-                throw new Error(`API returned ${response.status}: ${await response.text()}`);
-            }
-            payload = await response.json();
-
-        } else if (kind === "hybrid") {
-            const query = $("#q-hybrid").value.trim();
-            if (!query) throw new Error("Enter a question first.");
-            payload = await callApi("/query/hybrid", {
-                query,
-                category: state.category,
-                district: state.district,
-                accessibility: state.accessibility,
-                limit: state.limit,
-                generate: state.generate,
+        } else {
+            const q = $("q-hybrid").value.trim();
+            if (!q) throw new Error("Type a question first.");
+            data = await post("/query/hybrid", {
+                query: q, category: o.category, district: o.district,
+                accessibility: o.accessibility, limit: o.limit, generate: o.generate,
             });
         }
 
-        renderResults(payload, { gallery: kind.startsWith("image") });
+        show(data);
 
-    } catch (error) {
-        const message = error instanceof TypeError
-            ? `Cannot reach the API. Start it with: uvicorn api.main:app --reload --port 8000`
-            : error.message;
-        showError(message);
+    } catch (e) {
+        // A TypeError here means fetch could not reach the server at all.
+        $("results").hidden = true;
+        $("error").hidden = false;
+        $("error").textContent = e instanceof TypeError
+            ? "Cannot reach the API. Start it with: uvicorn api.main:app --port 8000"
+            : e.message;
     } finally {
-        setLoading(false);
+        busy(false);
     }
 }
 
-/* ----------------------------------------------------------------- startup */
+// --- setup ---
 
 async function loadFilters() {
     try {
-        const options = await (await fetch(`${API_BASE}/filters`)).json();
-        const add = (selectId, values, labeller) => {
-            const select = $(selectId);
-            for (const value of values) {
-                const option = document.createElement("option");
-                option.value = value;
-                option.textContent = labeller ? labeller(value) : value;
-                select.appendChild(option);
+        const o = await (await fetch(API + "/filters")).json();
+        const fill = (id, values, label) => {
+            for (const v of values) {
+                const el = document.createElement("option");
+                el.value = v;
+                el.textContent = label ? label(v) : v;
+                $(id).appendChild(el);
             }
         };
-        add("#f-category", options.categories, (v) => CATEGORY_LABELS[v] || v);
-        add("#f-district", options.districts);
-        add("#f-accessibility", options.accessibility,
-            (v) => v.charAt(0).toUpperCase() + v.slice(1));
+        fill("category", o.categories, (v) => LABELS[v] || v);
+        fill("district", o.districts);
+        fill("accessibility", o.accessibility);
     } catch {
-        // Health check below surfaces the underlying problem to the user.
+        // the status line below reports the real problem
     }
 }
 
-async function loadHealth() {
-    const list = $("#status");
+async function loadStatus() {
     try {
-        const health = await (await fetch(`${API_BASE}/health`)).json();
-        list.innerHTML = `
-            <dt>Database</dt><dd class="${health.database ? "" : "bad"}">
-                ${health.database ? "connected" : "unavailable"}</dd>
-            <dt>Text embeddings</dt><dd>${health.text_collection} vectors</dd>
-            <dt>Image embeddings</dt><dd>${health.image_collection} vectors</dd>
-            <dt>Gemini</dt><dd class="${health.gemini_configured ? "" : "bad"}">
-                ${health.gemini_configured ? "configured" : "not configured"}</dd>`;
+        const h = await (await fetch(API + "/health")).json();
+        $("status").textContent =
+            "Database " + (h.database ? "connected" : "unavailable") +
+            " | " + h.text_collection + " text vectors" +
+            " | " + h.image_collection + " image vectors" +
+            " | Gemini " + (h.gemini_configured ? "configured" : "not configured");
     } catch {
-        list.innerHTML = `<dt>Status</dt><dd class="bad">API unreachable</dd>`;
+        $("status").textContent = "API unreachable on port 8000.";
     }
 }
 
-function initTabs() {
-    document.querySelectorAll(".tab").forEach((tab) => {
-        tab.addEventListener("click", () => {
-            document.querySelectorAll(".tab").forEach((t) => t.classList.remove("is-active"));
-            document.querySelectorAll(".panel").forEach((p) => p.classList.remove("is-active"));
-            tab.classList.add("is-active");
-            $(`.panel[data-panel="${tab.dataset.tab}"]`).classList.add("is-active");
-        });
-    });
-}
-
-function initInputs() {
-    document.querySelectorAll("[data-search]").forEach((button) => {
-        button.addEventListener("click", () => runSearch(button.dataset.search));
-    });
-
-    // Enter submits the text box it was pressed in.
-    const enterTargets = {
-        "#q-structured": "structured", "#q-semantic": "semantic",
-        "#q-image": "image", "#q-hybrid": "hybrid",
+document.querySelectorAll(".tab").forEach((tab) => {
+    tab.onclick = () => {
+        document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+        document.querySelectorAll(".tabbody").forEach((b) => b.classList.remove("active"));
+        tab.classList.add("active");
+        $("tab-" + tab.dataset.tab).classList.add("active");
     };
-    for (const [selector, kind] of Object.entries(enterTargets)) {
-        $(selector).addEventListener("keydown", (event) => {
-            if (event.key === "Enter") runSearch(kind);
-        });
-    }
+});
 
-    $("#f-limit").addEventListener("input", (event) => {
-        $("#limit-value").textContent = event.target.value;
-    });
+document.querySelectorAll("button[data-run]").forEach((b) => {
+    b.onclick = () => run(b.dataset.run);
+});
 
-    $("#q-file").addEventListener("change", (event) => {
-        const file = event.target.files[0];
-        const preview = $("#preview");
-        if (!file) { preview.hidden = true; return; }
-        preview.src = URL.createObjectURL(file);
-        preview.hidden = false;
-    });
+for (const [id, kind] of [["q-structured", "structured"], ["q-semantic", "semantic"],
+                          ["q-image", "image"], ["q-hybrid", "hybrid"]]) {
+    $(id).onkeydown = (e) => { if (e.key === "Enter") run(kind); };
 }
 
-initTabs();
-initInputs();
+$("file").onchange = (e) => {
+    const f = e.target.files[0];
+    if (!f) { $("preview").hidden = true; return; }
+    $("preview").src = URL.createObjectURL(f);
+    $("preview").hidden = false;
+};
+
 loadFilters();
-loadHealth();
+loadStatus();

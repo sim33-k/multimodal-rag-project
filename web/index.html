@@ -1,170 +1,80 @@
 <!doctype html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Sri Lanka Tourism Explorer</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sri Lanka Tourism Search</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<header class="hero">
-    <div class="hero-inner">
-        <h1>Sri Lanka Tourism Explorer</h1>
-        <p>Structured, semantic, visual and hybrid retrieval over beaches,
-           mountains, national parks and historical sites.</p>
-    </div>
-</header>
+<h1>Sri Lanka Tourism Search</h1>
+<p id="status" class="status">Checking API...</p>
 
-<div class="layout">
+<div class="tabs">
+  <button class="tab active" data-tab="structured">Structured</button>
+  <button class="tab" data-tab="semantic">Semantic</button>
+  <button class="tab" data-tab="image">Image</button>
+  <button class="tab" data-tab="hybrid">Hybrid</button>
+</div>
 
-    <!-- Sidebar: filters apply to whichever tab is active -->
-    <aside class="sidebar">
-        <h2>Filters</h2>
+<div class="tabbody active" id="tab-structured">
+  <p class="note">SQL filters over the attractions_full view. Adds Postgres
+     full-text search if a keyword is given.</p>
+  <input type="text" id="q-structured" placeholder="Keyword (optional)">
+  <button data-run="structured">Search</button>
+  <label><input type="checkbox" id="free"> Free entry only</label>
+  <label><input type="checkbox" id="unesco"> UNESCO only</label>
+</div>
 
-        <label for="f-category">Category</label>
-        <select id="f-category">
-            <option value="">All categories</option>
-        </select>
+<div class="tabbody" id="tab-semantic">
+  <p class="note">Matches your wording against the descriptions by meaning,
+     using MiniLM embeddings.</p>
+  <input type="text" id="q-semantic" placeholder="e.g. a rainforest full of birds found nowhere else">
+  <button data-run="semantic">Search</button>
+</div>
 
-        <label for="f-district">District</label>
-        <select id="f-district">
-            <option value="">All districts</option>
-        </select>
+<div class="tabbody" id="tab-image">
+  <p class="note">CLIP image search. Upload a photo, or describe what a place
+     looks like and match against the photos themselves.</p>
+  <input type="file" id="file" accept="image/jpeg,image/png,image/webp">
+  <button data-run="image-upload">Find similar</button>
+  <img id="preview" hidden alt="">
+  <br>
+  <input type="text" id="q-image" placeholder="e.g. golden sand and palm trees">
+  <button data-run="image">Search images</button>
+</div>
 
-        <label for="f-accessibility">Accessibility</label>
-        <select id="f-accessibility">
-            <option value="">Any</option>
-        </select>
+<div class="tabbody" id="tab-hybrid">
+  <p class="note">Gemini classifies the query and pulls out filters, then the
+     retrievers that apply are run and merged with Reciprocal Rank Fusion.</p>
+  <input type="text" id="q-hybrid" placeholder="e.g. which UNESCO sites in Matale are worth a day trip?">
+  <button data-run="hybrid">Ask</button>
+</div>
 
-        <label for="f-limit">Maximum results <span id="limit-value">6</span></label>
-        <input type="range" id="f-limit" min="3" max="20" value="6">
+<fieldset class="filters">
+  <legend>Filters</legend>
+  <label>Category <select id="category"><option value="">All</option></select></label>
+  <label>District <select id="district"><option value="">All</option></select></label>
+  <label>Accessibility <select id="accessibility"><option value="">Any</option></select></label>
+  <label>Results <input type="number" id="limit" value="6" min="1" max="20"></label>
+  <label><input type="checkbox" id="generate" checked> Generate answer</label>
+</fieldset>
 
-        <label class="switch">
-            <input type="checkbox" id="f-generate" checked>
-            <span>Generate an answer</span>
-        </label>
-        <p class="hint">Turn off to see raw retrieval output with no model call.</p>
+<p id="loading" hidden>Searching...</p>
+<p id="error" class="error" hidden></p>
 
-        <h2>System</h2>
-        <dl class="status" id="status">
-            <dt>Status</dt><dd id="s-status">checking…</dd>
-        </dl>
-    </aside>
-
-    <main class="main">
-
-        <nav class="tabs" role="tablist">
-            <button class="tab is-active" data-tab="structured" role="tab">Structured</button>
-            <button class="tab" data-tab="semantic" role="tab">Semantic</button>
-            <button class="tab" data-tab="image" role="tab">Image</button>
-            <button class="tab" data-tab="hybrid" role="tab">Hybrid</button>
-        </nav>
-
-        <!-- Structured -->
-        <section class="panel is-active" data-panel="structured">
-            <p class="panel-note">
-                Filter the database by concrete attributes. Runs SQL against the
-                <code>attractions_full</code> view, plus Postgres full-text search
-                when a keyword is given.
-            </p>
-            <div class="row">
-                <input type="text" id="q-structured" class="text-input"
-                       placeholder="Keyword (optional) — e.g. Sigiriya, Galle, whale">
-                <button class="btn" data-search="structured">Search</button>
-            </div>
-            <div class="checks">
-                <label><input type="checkbox" id="f-free"> Free entry only</label>
-                <label><input type="checkbox" id="f-unesco"> UNESCO listed only</label>
-            </div>
-        </section>
-
-        <!-- Semantic -->
-        <section class="panel" data-panel="semantic">
-            <p class="panel-note">
-                Describe what you want in your own words. The query is embedded with
-                MiniLM and matched against descriptions by meaning, not keyword.
-            </p>
-            <div class="row">
-                <input type="text" id="q-semantic" class="text-input"
-                       placeholder="e.g. a rainforest full of birds found nowhere else">
-                <button class="btn" data-search="semantic">Search</button>
-            </div>
-        </section>
-
-        <!-- Image -->
-        <section class="panel" data-panel="image">
-            <p class="panel-note">
-                Search by appearance using CLIP. Upload a photograph to find visually
-                similar places, or describe a scene to match against the images
-                themselves rather than their descriptions.
-            </p>
-            <div class="split">
-                <div>
-                    <h3>Upload an image</h3>
-                    <input type="file" id="q-file" accept="image/png,image/jpeg,image/webp">
-                    <img id="preview" class="preview" alt="" hidden>
-                    <button class="btn" data-search="image-upload">Find similar</button>
-                </div>
-                <div>
-                    <h3>Or describe what it looks like</h3>
-                    <input type="text" id="q-image" class="text-input"
-                           placeholder="e.g. golden sand and palm trees">
-                    <button class="btn" data-search="image">Search images</button>
-                </div>
-            </div>
-        </section>
-
-        <!-- Hybrid -->
-        <section class="panel" data-panel="hybrid">
-            <p class="panel-note">
-                Ask anything. The router classifies the query and extracts filters,
-                then the relevant retrievers run and their rankings are merged with
-                Reciprocal Rank Fusion.
-            </p>
-            <div class="row">
-                <input type="text" id="q-hybrid" class="text-input"
-                       placeholder="e.g. which UNESCO ancient sites in Matale are worth a day trip?">
-                <button class="btn" data-search="hybrid">Ask</button>
-            </div>
-        </section>
-
-        <!-- Results -->
-        <div id="loading" class="loading" hidden>
-            <span class="spinner"></span><span id="loading-text">Searching…</span>
-        </div>
-
-        <div id="error" class="error" hidden></div>
-
-        <div id="results" hidden>
-            <div id="answer"></div>
-            <p id="route" class="route"></p>
-            <h2 id="result-count"></h2>
-
-            <div id="gallery" class="gallery" hidden></div>
-
-            <div class="results-grid">
-                <div id="cards"></div>
-                <div class="map-wrap">
-                    <h3>Map</h3>
-                    <svg id="map" viewBox="0 0 260 420" class="map"
-                         role="img" aria-label="Map of retrieved attractions"></svg>
-                    <ul class="legend">
-                        <li><i style="background:#14A0A0"></i>Beach</li>
-                        <li><i style="background:#073B3A"></i>Mountain</li>
-                        <li><i style="background:#4C8C4A"></i>National park</li>
-                        <li><i style="background:#C75B39"></i>Historical site</li>
-                    </ul>
-                </div>
-            </div>
-
-            <details class="evidence-box">
-                <summary>Retrieved context passed to the language model</summary>
-                <pre id="context" class="evidence"></pre>
-            </details>
-        </div>
-
-    </main>
+<div id="results" hidden>
+  <div id="answer"></div>
+  <p id="route" class="note"></p>
+  <p id="count"></p>
+  <ol id="cards"></ol>
+  <h2>Map</h2>
+  <svg id="map" viewBox="0 0 240 390"></svg>
+  <details>
+    <summary>Retrieved context passed to the model</summary>
+    <pre id="context"></pre>
+  </details>
 </div>
 
 <script src="app.js"></script>
