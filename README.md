@@ -26,7 +26,7 @@ Four query modes, each backed by its own retrieval strategy:
 ## Architecture
 
 ```
-Streamlit UI  ──HTTP──▶  FastAPI  ──▶  router (Gemini structured output)
+Browser UI  ──HTTP──▶  FastAPI  ──▶  router (Gemini structured output)
                                           │
                             ┌─────────────┼─────────────┬──────────────┐
                             ▼             ▼             ▼              ▼
@@ -145,32 +145,15 @@ python -m embeddings.image_embed   # re-embed
 
 ### 5. Run
 
-There are two interchangeable frontends. Both call the same API endpoints and
-neither touches the database directly.
-
-**Plain HTML client** — one command, nothing else to install:
+One command runs everything — the frontend is served by the API itself:
 
 ```bash
 uvicorn api.main:app --reload --port 8000
-```
-
-Then open <http://localhost:8000/ui>. It is served by the API itself, so requests
-are same-origin and no second process is needed.
-
-**Streamlit client** — needs a second terminal:
-
-```bash
-# Terminal 1
-uvicorn api.main:app --reload --port 8000
-
-# Terminal 2
-streamlit run app/streamlit_app.py
 ```
 
 | | |
 |---|---|
-| HTML UI | <http://localhost:8000/ui> |
-| Streamlit UI | <http://localhost:8501> |
+| Web UI | <http://localhost:8000/ui> |
 | API docs (Swagger) | <http://localhost:8000/docs> |
 | Health check | <http://localhost:8000/health> |
 
@@ -206,14 +189,10 @@ api/
   main.py              app instance, CORS, static images, health
   schemas.py           Pydantic request/response models
   routes/              one module per query type
-app/
-  streamlit_app.py     Streamlit frontend, calls the API over HTTP
-  ui_theme.py          injected CSS
-  components/          result cards, gallery, map
 web/
-  index.html           plain HTML frontend, served by the API at /ui
+  index.html           frontend, served by the API at /ui
   style.css            no framework, no external assets
-  app.js               no libraries; same endpoints as the Streamlit client
+  app.js               no libraries; calls the API over HTTP
 docs/                  architecture, database, embeddings, API, evaluation
 ```
 

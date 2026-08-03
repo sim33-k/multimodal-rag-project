@@ -17,6 +17,12 @@ Update this in the same commit as the change rather than batching entries at the
 - Map drawn as inline SVG with a hand-projected coastline, so the page has no CDN
   dependency and works with no internet connection
 
+### Removed
+- The Streamlit frontend and everything only it used: `app/`, `.streamlit/`, and
+  the `streamlit`, `pydeck`, `pandas` and `httpx` dependencies. The plain HTML
+  client covers the same features and is served by the API, so the system now
+  runs from one command instead of two processes
+
 ### To do
 - Complete the image set for all 40 attractions and rebuild image embeddings
 - Verify CSV facts (coordinates, fees, seasons) against a second source

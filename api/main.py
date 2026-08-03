@@ -1,8 +1,8 @@
 """FastAPI application: mounts the four query routers and serves attraction images.
 
-The Streamlit frontend talks only to this API and never opens a database or
-ChromaDB connection of its own. That boundary is what lets the retrieval pipeline
-be demonstrated on its own through the generated docs at /docs.
+The frontend talks only to this API and never opens a database or ChromaDB
+connection of its own. That boundary is what lets the retrieval pipeline be
+demonstrated on its own through the generated docs at /docs.
 
 Run with:  uvicorn api.main:app --reload --port 8000
 """
@@ -28,8 +28,9 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Streamlit runs on a different port, so it is a cross-origin caller. The origin
-# list is permissive because both services only ever run locally here.
+# The bundled frontend is same-origin, but CORS stays open so the API can also be
+# called from a page opened straight off disk during development. Everything here
+# only ever runs locally.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -44,10 +45,9 @@ IMAGES_DIR = PROJECT_ROOT / "data" / "images"
 IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
 
-# The plain HTML/CSS/JS client, served from the API itself at /ui. Doing it this
-# way means requests are same-origin, so no CORS is involved and no second server
-# has to be started. The page still goes through the same HTTP endpoints as the
-# Streamlit client - it has no privileged access of any kind.
+# The frontend, served from the API itself at /ui, so requests are same-origin and
+# no second server has to be started. It reaches the data only through the HTTP
+# endpoints below - it has no privileged access of any kind.
 WEB_DIR = PROJECT_ROOT / "web"
 if WEB_DIR.exists():
     app.mount("/ui", StaticFiles(directory=str(WEB_DIR), html=True), name="ui")
@@ -69,8 +69,8 @@ def _collection_count(name: str) -> int:
 def health() -> HealthResponse:
     """Report which backing services are reachable and populated.
 
-    Used by the Streamlit sidebar to tell the user what is missing when results
-    come back empty, rather than silently returning nothing.
+    The frontend uses this to say what is missing when results come back empty,
+    rather than leaving an unconfigured system looking like an empty database.
     """
     database_ok = ping()
     return HealthResponse(

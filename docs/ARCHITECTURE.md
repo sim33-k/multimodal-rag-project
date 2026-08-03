@@ -7,7 +7,7 @@ hard boundary between them.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  Streamlit frontend (app/)                                   │
+│  Browser frontend (web/)                                     │
 │  Renders results. Holds no query logic. HTTP only.           │
 └───────────────────────────┬──────────────────────────────────┘
                             │  JSON / multipart over HTTP
@@ -31,8 +31,8 @@ hard boundary between them.
 
 ## Why the frontend goes through an API
 
-The Streamlit app could import `retrieval/` directly and skip a network hop. It
-does not, for three reasons:
+The frontend is served by the API but still goes through HTTP rather than being
+wired into `retrieval/` directly, for three reasons:
 
 1. **The retrieval pipeline stays demonstrable on its own.** FastAPI generates
    Swagger docs at `/docs`, so every query type can be exercised and shown without
@@ -139,7 +139,7 @@ Neither takes the system down.
 | No Gemini key, or quota exhausted | Router falls back to a keyword heuristic; answers are composed from the retrieved rows and labelled as such in the UI |
 | Text collection empty | Semantic search returns nothing; SQL and full-text still work |
 | Image collection empty | Image search returns nothing; other modes unaffected |
-| Database unreachable | `/health` reports `degraded` and the sidebar shows it |
+| Database unreachable | `/health` reports `degraded` and the frontend says so instead of showing an empty result |
 
 The design rule is that a failure in the generation layer must never prevent
 retrieval from being demonstrated. This matters in practice — a rate-limited API
@@ -154,4 +154,4 @@ page.
 - `llm/` receives already-retrieved rows. It never queries anything itself.
 - `api/routes/` contains only each endpoint's retrieval strategy; the shared
   response assembly lives in `api/routes/__init__.py`.
-- `app/` reads no files and opens no database connections.
+- `web/` reads no files and opens no database connections.

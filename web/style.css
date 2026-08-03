@@ -1,5 +1,5 @@
-/* Colours are all set explicitly. Leaving text colour to inherit broke the
-   Streamlit page on machines set to dark mode. */
+/* Colours are all set explicitly, so nothing inherits a light text colour from a
+   browser or OS set to dark mode. */
 
 body {
     font-family: Arial, Helvetica, sans-serif;

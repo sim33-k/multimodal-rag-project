@@ -2,7 +2,7 @@
 
 Defining these explicitly rather than returning bare dicts is what gives the
 FastAPI /docs page its schemas, which makes the API independently demonstrable
-without the Streamlit frontend.
+without the frontend.
 """
 
 from typing import Any, Literal
