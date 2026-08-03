@@ -44,6 +44,14 @@ IMAGES_DIR = PROJECT_ROOT / "data" / "images"
 IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
 
+# The plain HTML/CSS/JS client, served from the API itself at /ui. Doing it this
+# way means requests are same-origin, so no CORS is involved and no second server
+# has to be started. The page still goes through the same HTTP endpoints as the
+# Streamlit client - it has no privileged access of any kind.
+WEB_DIR = PROJECT_ROOT / "web"
+if WEB_DIR.exists():
+    app.mount("/ui", StaticFiles(directory=str(WEB_DIR), html=True), name="ui")
+
 app.include_router(structured.router, prefix="/query", tags=["query"])
 app.include_router(semantic.router, prefix="/query", tags=["query"])
 app.include_router(image.router, prefix="/query", tags=["query"])
@@ -85,6 +93,7 @@ def root() -> dict:
     return {
         "name": "SL Tourism Multimodal RAG API",
         "docs": "/docs",
+        "ui": "/ui",
         "endpoints": [
             "POST /query/structured",
             "POST /query/semantic",

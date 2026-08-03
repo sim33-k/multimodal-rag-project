@@ -8,6 +8,15 @@ Update this in the same commit as the change rather than batching entries at the
 
 ## [Unreleased]
 
+### Added
+- Plain HTML/CSS/JS frontend under `web/`, served by the API at `/ui`. No
+  framework, no libraries, no external assets — one `uvicorn` command runs the
+  whole system. Covers the same features as the Streamlit client: sidebar
+  filters, four query tabs, result cards, photo gallery, map and the retrieved
+  context panel
+- Map drawn as inline SVG with a hand-projected coastline, so the page has no CDN
+  dependency and works with no internet connection
+
 ### To do
 - Complete the image set for all 40 attractions and rebuild image embeddings
 - Verify CSV facts (coordinates, fees, seasons) against a second source
