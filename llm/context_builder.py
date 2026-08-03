@@ -31,40 +31,6 @@ SKIP_FIELDS = [
 ]
 
 
-def format_row(index, row, description):
-    category = row.get("category", "")
-    category = category.replace("_", " ")
-
-    lines = []
-    lines.append("[" + str(index) + "] " + row["name"] + " (" + category + ")")
-
-    for key in row:
-        if key in SKIP_FIELDS:
-            continue
-        value = row[key]
-        if value is None or value == "":
-            continue
-
-        if key in FIELD_LABELS:
-            label = FIELD_LABELS[key]
-        else:
-            label = key.replace("_", " ").capitalize()
-
-        lines.append("    " + label + ": " + str(value))
-
-    if row.get("images"):
-        lines.append("    Images available: " + str(len(row["images"])))
-
-    if description:
-        trimmed = description.strip()
-        if len(trimmed) > MAX_DESCRIPTION_CHARS:
-            trimmed = trimmed[:MAX_DESCRIPTION_CHARS]
-            trimmed = trimmed.rsplit(" ", 1)[0] + "..."
-        lines.append("    Description: " + trimmed)
-
-    return "\n".join(lines)
-
-
 def build_context(rows, descriptions=None, max_items=MAX_CONTEXT_ITEMS):
     # stop after max_items. the results past the top few aren't that relevant
     # and a long list just makes the model pad the answer out with places nobody
@@ -79,7 +45,38 @@ def build_context(rows, descriptions=None, max_items=MAX_CONTEXT_ITEMS):
     index = 1
     for row in rows[:max_items]:
         description = descriptions.get(row["id"])
-        blocks.append(format_row(index, row, description))
+
+        category = row.get("category", "")
+        category = category.replace("_", " ")
+
+        lines = []
+        lines.append("[" + str(index) + "] " + row["name"] + " (" + category + ")")
+
+        for key in row:
+            if key in SKIP_FIELDS:
+                continue
+            value = row[key]
+            if value is None or value == "":
+                continue
+
+            if key in FIELD_LABELS:
+                label = FIELD_LABELS[key]
+            else:
+                label = key.replace("_", " ").capitalize()
+
+            lines.append("    " + label + ": " + str(value))
+
+        if row.get("images"):
+            lines.append("    Images available: " + str(len(row["images"])))
+
+        if description:
+            trimmed = description.strip()
+            if len(trimmed) > MAX_DESCRIPTION_CHARS:
+                trimmed = trimmed[:MAX_DESCRIPTION_CHARS]
+                trimmed = trimmed.rsplit(" ", 1)[0] + "..."
+            lines.append("    Description: " + trimmed)
+
+        blocks.append("\n".join(lines))
         index = index + 1
 
     return "\n\n".join(blocks)

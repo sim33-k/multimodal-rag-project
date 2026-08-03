@@ -120,9 +120,9 @@ requests per day. Override any of them in `.env` via `GEMINI_MODEL`,
 ### 4. Build the data
 
 ```bash
-python -m db.init_db               # creates the schema, loads CSVs, registers images
-python -m embeddings.text_embed    # MiniLM description embeddings
-python -m embeddings.image_embed   # CLIP image embeddings
+python db/init_db.py               # creates the schema, loads CSVs, registers images
+python embeddings/text_embed.py    # MiniLM description embeddings
+python embeddings/image_embed.py   # CLIP image embeddings
 ```
 
 Images are committed to the repository, so a fresh clone needs no downloads.
@@ -133,9 +133,9 @@ a CSV.
 To add or refresh images:
 
 ```bash
-python -m data.fetch_images        # skips files it already has
-python -m db.init_db               # re-register
-python -m embeddings.image_embed   # re-embed
+python data/fetch_images.py        # skips files it already has
+python db/init_db.py               # re-register
+python embeddings/image_embed.py   # re-embed
 ```
 
 > Wikimedia rate-limits bulk downloads aggressively and the script backs off when
@@ -219,7 +219,7 @@ empty results:
 All 40 attractions are text-searchable. `image_collection` is lower because
 Wikimedia rate-limiting left part of the image set undownloaded — this affects the
 image tab only; structured, semantic and hybrid search cover all four categories
-regardless. Re-run `python -m data.fetch_images` to top it up.
+regardless. Re-run `python data/fetch_images.py` to top it up.
 
 ---
 

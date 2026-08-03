@@ -50,22 +50,26 @@ app.include_router(image.router, prefix="/query", tags=["query"])
 app.include_router(hybrid.router, prefix="/query", tags=["query"])
 
 
-def collection_count(name):
-    try:
-        return get_collection(name).count()
-    except Exception:
-        return 0
-
-
 @app.get("/health", response_model=HealthResponse, tags=["system"])
 def health() -> HealthResponse:
     # so an unconfigured system doesn't just look like an empty database
     database_ok = ping()
+
+    try:
+        text_count = get_collection(TEXT_COLLECTION).count()
+    except Exception:
+        text_count = 0
+
+    try:
+        image_count = get_collection(IMAGE_COLLECTION).count()
+    except Exception:
+        image_count = 0
+
     return HealthResponse(
         status="ok" if database_ok else "degraded",
         database=database_ok,
-        text_collection=collection_count(TEXT_COLLECTION),
-        image_collection=collection_count(IMAGE_COLLECTION),
+        text_collection=text_count,
+        image_collection=image_count,
         gemini_configured=is_configured(),
     )
 
