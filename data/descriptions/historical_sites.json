@@ -1,0 +1,52 @@
+[
+  {
+    "id": "sigiriya",
+    "name": "Sigiriya",
+    "description": "A citadel built on top of a two-hundred-metre column of hardened magma by King Kashyapa in the fifth century, reached by a stairway that passes between the paws of a colossal carved lion, from which the site takes its name. Partway up, a sheltered gallery preserves frescoes of female figures painted directly onto the rock face, protected alongside the mirror wall where visitors from the eighth century onward scratched verses. The summit holds the foundations of the royal palace, while symmetrical water gardens with functioning hydraulics survive at the base."
+  },
+  {
+    "id": "dambulla_cave_temple",
+    "name": "Dambulla Cave Temple",
+    "description": "Five caves hollowed beneath an overhanging rock, converted into a temple complex by King Valagamba in the first century BC after he sheltered there in exile. Every interior surface is painted, with more than two thousand square metres of murals covering the ceilings, alongside one hundred and fifty statues of the Buddha in reclining, seated and standing postures. The largest reclining figure is carved directly from the living rock of the cave itself."
+  },
+  {
+    "id": "polonnaruwa",
+    "name": "Ancient City of Polonnaruwa",
+    "description": "The island's second capital, at its height under Parakramabahu the Great in the twelfth century, and unusually compact and well preserved so the whole site can be seen on foot or by bicycle in a day. Highlights include the Gal Vihara group of four colossal Buddha figures cut from a single granite face, the circular Vatadage relic house, and the ruins of the royal palace complex. The vast Parakrama Samudra reservoir alongside the city still irrigates the surrounding farmland."
+  },
+  {
+    "id": "anuradhapura",
+    "name": "Sacred City of Anuradhapura",
+    "description": "The first capital of Sri Lanka and a continuously inhabited centre of Buddhist practice for over a thousand years, spread across a large area that is best covered by vehicle or bicycle. Its enormous brick stupas, including Ruwanwelisaya and Jetavanaramaya, were among the tallest structures in the ancient world. The Sri Maha Bodhi, grown from a cutting of the tree under which the Buddha attained enlightenment and planted in the third century BC, is the oldest human-planted tree with a recorded history."
+  },
+  {
+    "id": "galle_fort",
+    "name": "Galle Fort",
+    "description": "A fortified peninsula first built by the Portuguese in the sixteenth century and greatly extended by the Dutch, whose ramparts, bastions and drainage system still enclose a living town rather than a ruin. Inside the walls are Dutch colonial villas, warehouses, a lighthouse and churches along a grid of narrow streets now occupied by cafes, galleries and guesthouses. Walking the full circuit of the ramparts at sunset is the standard way to see it, and there is no entrance fee."
+  },
+  {
+    "id": "temple_of_the_tooth",
+    "name": "Temple of the Sacred Tooth Relic",
+    "description": "The Sri Dalada Maligawa in Kandy houses a tooth relic of the Buddha, historically regarded as conferring the right to rule the island, which is why it sits within the former royal palace complex. The relic itself is never displayed, but the golden casket chamber is opened during daily ceremonies announced by drummers. Each August the Esala Perahera procession parades a replica casket through Kandy with dancers and caparisoned elephants over ten nights."
+  },
+  {
+    "id": "yapahuwa",
+    "name": "Yapahuwa Rock Fortress",
+    "description": "A brief thirteenth-century capital built on a rock outcrop, chosen like Sigiriya for its defensibility, and used to safeguard the tooth relic against invasion from South India. Its defining feature is an exceptionally ornate stone stairway, steep and narrow, flanked by carved lions and musicians and considered among the finest stone carving of the period. The site is quiet, rarely crowded and a short detour from the road between Kurunegala and Anuradhapura."
+  },
+  {
+    "id": "mihintale",
+    "name": "Mihintale",
+    "description": "The hill where the missionary monk Mahinda is said to have met King Devanampiya Tissa in the third century BC, the encounter that introduced Buddhism to Sri Lanka, making it in effect the birthplace of the island's Buddhist tradition. A granite stairway of over eighteen hundred steps climbs past monastic ruins, refectories and an ancient hospital site to the Ambasthala stupa and the exposed summit rock. It is busiest at the Poson full moon in June, when pilgrims arrive in very large numbers."
+  },
+  {
+    "id": "ritigala",
+    "name": "Ritigala Monastery Ruins",
+    "description": "The remains of a forest monastery of ascetic monks, set on a mountain whose elevation traps moisture and supports a pocket of montane vegetation surrounded on all sides by dry-zone plain. The layout is deliberately austere, with none of the usual carved decoration, and centres on long paved meditation walkways and double-platform structures joined by stone bridges. The strict nature reserve status keeps visitor numbers low and the site quiet and heavily forested."
+  },
+  {
+    "id": "nalanda_gedige",
+    "name": "Nalanda Gedige",
+    "description": "A small stone shrine of the eighth to tenth century, notable because it is built entirely in South Indian Dravidian style yet appears to have served Buddhist worship, making it an unusual architectural hybrid. The structure was dismantled and moved to its present position above the Bowatenna reservoir when the original site was flooded by the dam. It sits close to the exact geographic centre of the island."
+  }
+]

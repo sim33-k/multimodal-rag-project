@@ -1,0 +1,13 @@
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.env
+embeddings/chroma_store/
+.pytest_cache/
+.DS_Store
+*.egg-info/
+docs/report/*.pdf
+
+# Internal planning document, kept out of the repository
+docs/PROJECT_SPEC.md

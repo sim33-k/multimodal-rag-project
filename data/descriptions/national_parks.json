@@ -1,0 +1,52 @@
+[
+  {
+    "id": "yala_national_park",
+    "name": "Yala National Park",
+    "description": "The country's most visited national park, holding one of the highest densities of leopard recorded anywhere in the world, concentrated in the heavily trafficked Block One. Beyond leopard the park supports elephant, sloth bear, crocodile and a large resident and migratory bird population across a landscape of dry monsoon scrub, brackish lagoons and rock outcrops. Game drives run at dawn and late afternoon, and the park usually closes for several weeks around September for drought."
+  },
+  {
+    "id": "udawalawe_national_park",
+    "name": "Udawalawe National Park",
+    "description": "Open grassland and scrub around a large reservoir, giving unusually clear sightlines and making this the most reliable place in Sri Lanka to see wild elephant, present in herds year-round rather than seasonally. The lack of dense cover also makes it excellent for raptors and water birds. The adjoining Elephant Transit Home releases orphaned calves back into the park and holds public feeding sessions through the day."
+  },
+  {
+    "id": "wilpattu_national_park",
+    "name": "Wilpattu National Park",
+    "description": "The largest national park in the country, defined by its villus, natural sand-rimmed lakes that fill with rainwater and draw animals into the open. It is far quieter than Yala with a fraction of the vehicles, so sightings feel less crowded although leopards are harder to find in the thicker forest. The park was closed for many years during the civil conflict and its wildlife populations have recovered strongly since reopening."
+  },
+  {
+    "id": "minneriya_national_park",
+    "name": "Minneriya National Park",
+    "description": "Centred on an ancient reservoir built in the third century, this park is famous for the Gathering, when several hundred elephants converge on the receding lake bed to feed on fresh grass during the dry months from June to September. It is considered the largest seasonal concentration of Asian elephants anywhere. Outside that window the herds disperse to neighbouring Kaudulla and Wasgamuwa."
+  },
+  {
+    "id": "horton_plains_national_park",
+    "name": "Horton Plains National Park",
+    "description": "A high montane plateau of open grassland and cloud forest, and the only national park in Sri Lanka where visitors walk freely rather than driving. The main circuit takes in World's End, a sheer escarpment dropping close to nine hundred metres, and the Baker's Falls cascade. Walkers set out at first light because cloud fills the escarpment by mid-morning and hides the view entirely, and the plateau is cold enough for ground frost in the early hours."
+  },
+  {
+    "id": "kumana_national_park",
+    "name": "Kumana National Park",
+    "description": "A coastal park on the southeast edge of the island best known for its mangrove swamp and the Kumana Villu bird sanctuary, where large numbers of waterbirds nest between May and July. Painted stork, pelican and spoonbill breed here in colonies, and rarer migratory species are regularly recorded. Elephant and leopard are present but sighted less predictably than in the neighbouring Yala blocks."
+  },
+  {
+    "id": "bundala_national_park",
+    "name": "Bundala National Park",
+    "description": "A Ramsar-listed coastal wetland of shallow lagoons, salt pans and dune scrub, and the country's premier destination for migratory shorebirds arriving between September and March. It is the main Sri Lankan wintering ground for greater flamingo, which gather in flocks on the salterns. Saltwater crocodile, elephant and all five resident sea turtle species also occur within the park boundaries."
+  },
+  {
+    "id": "wasgamuwa_national_park",
+    "name": "Wasgamuwa National Park",
+    "description": "A rarely visited park between the Mahaweli and Amban rivers, offering a genuinely quiet safari experience with very few other vehicles. Its resident elephant herds are large but can be shy, and the park is a stronghold for sloth bear as well as a long list of endemic birds. Ancient irrigation tanks and ruined structures scattered through the dry evergreen forest hint at earlier settlement."
+  },
+  {
+    "id": "kaudulla_national_park",
+    "name": "Kaudulla National Park",
+    "description": "Built around another ancient reservoir a short distance north of Minneriya, and part of the same elephant corridor. It takes over as the main gathering point later in the year, roughly from August into December, as water levels shift between the two tanks. The open grassland along the tank edge also supports large flocks of waterbirds and occasional fishing cat and leopard sightings."
+  },
+  {
+    "id": "sinharaja_forest_reserve",
+    "name": "Sinharaja Forest Reserve",
+    "description": "The last substantial stand of primary lowland rainforest in Sri Lanka and a UNESCO World Heritage Site, extraordinarily rich in species found nowhere else on earth. More than half of the island's endemic mammals, butterflies and trees occur here, and it is the classic destination for endemic birding, where mixed-species feeding flocks move noisily through the canopy. Visits are on foot with a compulsory guide, the terrain is steep and wet, and leeches are a constant of the walk."
+  }
+]

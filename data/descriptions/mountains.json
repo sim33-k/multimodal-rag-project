@@ -1,0 +1,52 @@
+[
+  {
+    "id": "adams_peak",
+    "name": "Adam's Peak",
+    "description": "A conical peak also known as Sri Pada, revered simultaneously by Buddhists, Hindus, Muslims and Christians for the rock formation at its summit interpreted as a sacred footprint. Pilgrims climb through the night on a stairway of more than five thousand steps, lit and lined with tea stalls during the December to May season, in order to reach the top for sunrise. The famous phenomenon at dawn is the peak casting a perfect triangular shadow onto the clouds to the west."
+  },
+  {
+    "id": "pidurutalagala",
+    "name": "Pidurutalagala",
+    "description": "The highest point in Sri Lanka, rising above Nuwara Eliya in the central highlands. The summit hosts national telecommunications and military installations, so public access is restricted and requires permission, with the approach made by a sealed road rather than a footpath. The surrounding montane cloud forest is a critical watershed and holds a distinct high-altitude flora."
+  },
+  {
+    "id": "kirigalpotta",
+    "name": "Kirigalpotta",
+    "description": "The second highest peak on the island, reached by a demanding and often waterlogged trail leading out of the Horton Plains plateau. The route crosses open montane grassland before entering dense stunted cloud forest hung with moss, and it sees far fewer walkers than the nearby World's End circuit. Walkers must register at the park entrance and start early to return before the afternoon mist closes in."
+  },
+  {
+    "id": "thotupola_kanda",
+    "name": "Thotupola Kanda",
+    "description": "The third highest peak in the country and by far the most accessible of the high summits, with a short well-marked trail from the Horton Plains road that most walkers complete in under two hours. The path passes through a low, wind-sculpted cloud forest of gnarled and lichen-covered trees before opening onto a flat summit with views across the plateau. It is a good introduction to montane highland walking for those not attempting Kirigalpotta."
+  },
+  {
+    "id": "gombaniya_knuckles",
+    "name": "Gombaniya Peak",
+    "description": "The highest point of the Knuckles massif, a rugged conservation area named for the resemblance of its ridgeline to a clenched fist. Trails cross a striking range of zones in a single day, from cardamom plantations and pine to open patana grassland and dwarf cloud forest. The range is a designated conservation area with its own permit system, and weather turns quickly, so guided walks are the norm."
+  },
+  {
+    "id": "ella_rock",
+    "name": "Ella Rock",
+    "description": "A rocky outcrop above the town of Ella, reached by a walk that begins along the railway track before climbing through tea estates and eucalyptus. The unmarked and frequently confusing route is part of its reputation, and most walkers hire a local guide. The summit gives a wide view down the Ella Gap towards the southern plains, best in the clear early morning before cloud builds."
+  },
+  {
+    "id": "little_adams_peak",
+    "name": "Little Adam's Peak",
+    "description": "A short, gentle climb named for its resemblance in profile to the far larger Adam's Peak, and the easiest serious viewpoint in the hill country. A well-maintained path of steps rises through tea plantations to a series of grassy false summits, taking under an hour each way. It is the standard sunrise and sunset walk from Ella and requires no guide or permit."
+  },
+  {
+    "id": "namunukula",
+    "name": "Namunukula",
+    "description": "A ridge of nine distinct peaks above Badulla, from which its name meaning nine peaks derives. The walk climbs through tea estates and patches of remaining montane forest to an exposed summit ridge that on clear days offers views over the Uva basin and out towards the southeast coast. It sees comparatively few visitors and has no formal entrance fee."
+  },
+  {
+    "id": "hakgala_rock",
+    "name": "Hakgala Rock",
+    "description": "A sheer rock massif rising directly behind the Hakgala Botanical Gardens outside Nuwara Eliya. In the Ramayana the rock is identified as the outcrop carried by Hanuman, and the name translates as jaw rock. The climb is steep and largely unmaintained, passing through strict natural reserve forest, and the botanical gardens at its base are worth the visit on their own for their cool-climate roses and orchids."
+  },
+  {
+    "id": "bathalegala",
+    "name": "Bathalegala",
+    "description": "A flat-topped rock widely called Bible Rock because its profile resembles an open book resting on a lectern, visible for a long stretch of the Kandy road. The ascent from Aranayaka is a moderate half-day walk through village smallholdings and rubber before a final steep section onto the plateau summit. The flat top gives an unobstructed panorama over the Kegalle valley and out to the Knuckles range."
+  }
+]

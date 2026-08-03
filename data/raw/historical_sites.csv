@@ -1,0 +1,11 @@
+id,name,location,district,latitude,longitude,entrance_fee,accessibility,best_season,historical_period,architectural_style,unesco_status
+sigiriya,Sigiriya,Sigiriya,Matale,7.9570,80.7603,USD 30,moderate,year-round,5th century AD (Kashyapa era),ancient rock fortress,UNESCO World Heritage Site
+dambulla_cave_temple,Dambulla Cave Temple,Dambulla,Matale,7.8567,80.6492,LKR 2000 (foreign),moderate,year-round,1st century BC onwards,cave temple complex with painted murals,UNESCO World Heritage Site
+polonnaruwa,Ancient City of Polonnaruwa,Polonnaruwa,Polonnaruwa,7.9403,81.0188,USD 25,easy,year-round,11th-13th century AD,medieval Sinhalese royal capital,UNESCO World Heritage Site
+anuradhapura,Sacred City of Anuradhapura,Anuradhapura,Anuradhapura,8.3114,80.4037,USD 25,easy,year-round,4th century BC - 11th century AD,ancient stupas and monastic complexes,UNESCO World Heritage Site
+galle_fort,Galle Fort,Galle,Galle,6.0257,80.2170,Free,easy,Nov-Apr,16th-18th century (Portuguese and Dutch),colonial rampart fortification,UNESCO World Heritage Site
+temple_of_the_tooth,Temple of the Sacred Tooth Relic,Kandy,Kandy,7.2936,80.6413,LKR 2000 (foreign),easy,year-round,16th-18th century (Kandyan Kingdom),Kandyan royal temple architecture,Within the UNESCO-listed Sacred City of Kandy
+yapahuwa,Yapahuwa Rock Fortress,Yapahuwa,Kurunegala,7.8139,80.3167,LKR 1000 (foreign),moderate,year-round,13th century AD,rock fortress with ornamental stairway,Not listed
+mihintale,Mihintale,Mihintale,Anuradhapura,8.3500,80.5167,LKR 1000 (foreign),moderate,year-round,3rd century BC,monastic hill complex,Not listed
+ritigala,Ritigala Monastery Ruins,Ritigala,Anuradhapura,8.1167,80.6500,LKR 1000 (foreign),moderate,year-round,1st century BC - 10th century AD,forest monastery ruins,Not listed
+nalanda_gedige,Nalanda Gedige,Nalanda,Matale,7.6833,80.6500,LKR 500 (foreign),easy,year-round,8th-10th century AD,stone shrine blending Hindu and Buddhist forms,Not listed

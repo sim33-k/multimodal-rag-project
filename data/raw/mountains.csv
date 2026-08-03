@@ -1,0 +1,11 @@
+id,name,location,district,latitude,longitude,entrance_fee,accessibility,best_season,height_m,trekking_difficulty,duration_hours
+adams_peak,Adam's Peak,Ratnapura,Ratnapura,6.8096,80.4994,"LKR 500 (foreign) / LKR 50 (local)",difficult,Dec-May,2243,strenuous,6
+pidurutalagala,Pidurutalagala,Nuwara Eliya,Nuwara Eliya,7.0000,80.7667,Restricted - military permit required,difficult,Jan-Mar,2524,moderate,4
+kirigalpotta,Kirigalpotta,Horton Plains,Nuwara Eliya,6.7900,80.7833,"USD 25 (Horton Plains park fee)",difficult,Jan-Mar,2388,strenuous,7
+thotupola_kanda,Thotupola Kanda,Horton Plains,Nuwara Eliya,6.8425,80.8183,"USD 25 (Horton Plains park fee)",moderate,Jan-Mar,2357,moderate,2
+gombaniya_knuckles,Gombaniya Peak,Knuckles Range,Kandy,7.4333,80.7833,"LKR 1000 conservation fee",difficult,Jan-Mar,1906,strenuous,8
+ella_rock,Ella Rock,Ella,Badulla,6.8560,81.0490,Free,moderate,Dec-Mar,1041,moderate,4
+little_adams_peak,Little Adam's Peak,Ella,Badulla,6.8720,81.0620,Free,easy,year-round,1141,easy,1.5
+namunukula,Namunukula,Namunukula,Badulla,6.9333,81.1167,Free,moderate,Jan-Mar,2035,moderate,5
+hakgala_rock,Hakgala Rock,Hakgala,Nuwara Eliya,6.9256,80.8181,"LKR 1500 (foreign, botanical garden entry)",difficult,Mar-May,2169,strenuous,5
+bathalegala,Bathalegala,Aranayaka,Kegalle,7.2333,80.4667,Free,moderate,Dec-Mar,798,moderate,3

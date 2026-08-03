@@ -1,0 +1,52 @@
+[
+  {
+    "id": "mirissa_beach",
+    "name": "Mirissa Beach",
+    "description": "A crescent of golden sand on the south coast fringed by coconut palms, Mirissa is the country's best known departure point for blue whale and dolphin watching, with boats leaving before dawn between November and April. The bay is calm enough for swimming at its eastern end while the western end picks up a gentle beginner-friendly swell. Parrot Rock, a small headland reachable at low tide, is the classic sunset viewpoint over the bay."
+  },
+  {
+    "id": "unawatuna_beach",
+    "name": "Unawatuna Beach",
+    "description": "A sheltered horseshoe bay just outside Galle, protected by a coral reef that keeps the water unusually calm and shallow. This makes it one of the safest swimming beaches in the south and a popular spot for snorkelling directly off the sand. A palm-shaded strip of guesthouses and seafood restaurants runs the length of the bay, and the hilltop Japanese Peace Pagoda overlooks it from the western headland."
+  },
+  {
+    "id": "arugam_bay",
+    "name": "Arugam Bay",
+    "description": "The centre of Sri Lanka's east coast surf scene, Arugam Bay offers a long right-hand point break that works most consistently from May to September when the rest of the island is under monsoon. The village has a relaxed low-rise character with surf camps and beach shacks rather than large hotels. Nearby lagoons and the edge of Kumana National Park make elephant and crocodile sightings common on short inland excursions."
+  },
+  {
+    "id": "hikkaduwa_beach",
+    "name": "Hikkaduwa Beach",
+    "description": "Best known for its shallow coral sanctuary where green turtles feed close to shore and can be seen while snorkelling in waist-deep water. Glass-bottom boats run over the reef for visitors who prefer to stay dry. Beyond the reef the beach picks up a reliable reef break that draws intermediate surfers, and the town has a long-established nightlife strip along the coast road."
+  },
+  {
+    "id": "bentota_beach",
+    "name": "Bentota Beach",
+    "description": "A wide sweep of sand on a spit between the Indian Ocean and the Bentota River, which makes it the main watersports hub of the west coast. Jet skiing, banana boating and windsurfing all operate on the calmer river side while the ocean side stays open for swimming. River safaris upstream pass through mangrove tunnels rich in monitor lizards and kingfishers."
+  },
+  {
+    "id": "nilaveli_beach",
+    "name": "Nilaveli Beach",
+    "description": "A long, quiet white-sand beach north of Trincomalee with notably clear shallow water and very little development. It is the launch point for Pigeon Island National Park, a short boat ride offshore, where the fringing reef supports blacktip reef sharks and dense coral gardens. The east coast season runs opposite to the south, so conditions are best from May to September."
+  },
+  {
+    "id": "pasikuda_beach",
+    "name": "Pasikuda Beach",
+    "description": "A shallow, almost waveless bay where the seabed shelves so gradually that it is possible to wade several hundred metres from shore. That calmness makes it particularly suited to families and to kayaking and paddleboarding. A cluster of resorts lines the bay, and the neighbouring Kalkudah beach a few kilometres south remains far quieter."
+  },
+  {
+    "id": "tangalle_beach",
+    "name": "Tangalle Beach",
+    "description": "A string of wide, largely undeveloped bays on the deep south coast backed by palm groves and low cliffs. Some stretches have strong currents and are better for walking than swimming, while sheltered coves near the harbour are safe to enter. The Rekawa turtle conservation site nearby offers guided night visits to watch nesting green turtles come ashore."
+  },
+  {
+    "id": "weligama_beach",
+    "name": "Weligama Beach",
+    "description": "A broad shallow bay with a soft sandy bottom and a slow, forgiving wave, which has made it the main beginner surf destination in the country with dozens of board rental and lesson operations along the road. The bay is also where the traditional stilt fishermen are most often photographed, perched on poles set into the seabed. Taprobane Island sits just offshore at the western end."
+  },
+  {
+    "id": "negombo_beach",
+    "name": "Negombo Beach",
+    "description": "The closest beach to Bandaranaike International Airport, making it the usual first or last stop of a trip. Beyond the sand, the town is defined by its lagoon and its Dutch-era canal system, still worked by outrigger fishing boats that land their catch at the lively morning fish market. Colonial-era Catholic churches throughout the town reflect its long Portuguese and Dutch history."
+  }
+]

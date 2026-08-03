@@ -1,0 +1,11 @@
+id,name,location,district,latitude,longitude,entrance_fee,accessibility,best_season,activity_type,water_quality,surf_break
+mirissa_beach,Mirissa Beach,Mirissa,Matara,5.9483,80.4589,Free,easy,Nov-Apr,"whale watching, surfing, swimming",clear,TRUE
+unawatuna_beach,Unawatuna Beach,Unawatuna,Galle,6.0100,80.2489,Free,easy,Nov-Apr,"swimming, snorkelling, diving",clear,FALSE
+arugam_bay,Arugam Bay,Arugam Bay,Ampara,6.8404,81.8340,Free,moderate,May-Sep,"surfing, lagoon safari",clear,TRUE
+hikkaduwa_beach,Hikkaduwa Beach,Hikkaduwa,Galle,6.1395,80.1063,Free,easy,Nov-Apr,"snorkelling, coral reef diving, surfing",clear,TRUE
+bentota_beach,Bentota Beach,Bentota,Galle,6.4213,79.9959,Free,easy,Nov-Apr,"jet skiing, river safari, swimming",clear,FALSE
+nilaveli_beach,Nilaveli Beach,Nilaveli,Trincomalee,8.6900,81.1900,Free,easy,May-Sep,"swimming, diving, Pigeon Island trips",clear,FALSE
+pasikuda_beach,Pasikuda Beach,Pasikuda,Batticaloa,7.9280,81.5620,Free,easy,May-Sep,"swimming, kayaking, snorkelling",clear,FALSE
+tangalle_beach,Tangalle Beach,Tangalle,Hambantota,6.0236,80.7947,Free,easy,Nov-Apr,"swimming, turtle watching",clear,FALSE
+weligama_beach,Weligama Beach,Weligama,Matara,5.9750,80.4297,Free,easy,Nov-Apr,"beginner surfing, stilt fishing",moderate,TRUE
+negombo_beach,Negombo Beach,Negombo,Gampaha,7.2083,79.8358,Free,easy,Nov-Apr,"lagoon fishing, water sports, swimming",moderate,FALSE
