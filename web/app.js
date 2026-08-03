@@ -71,16 +71,14 @@ function showAnswer(text, source) {
         '<div class="answer"><div class="label">' + label + "</div>" + body + "</div>";
 }
 
+// Just what ran. The router's own query_type is not shown: on this endpoint
+// semantic and full-text run whatever it decides, so printing its classification
+// next to the retriever list only made the two look like they disagreed. Its
+// reasoning was the model's raw sentence about "the user", which read oddly on
+// the page.
 function showRoute(data) {
-    const bits = [];
-    if (data.route) {
-        bits.push("Routed as " + esc(data.route.query_type) + " (" + esc(data.route.source) + ")");
-        if (data.route.reasoning) bits.push(esc(data.route.reasoning));
-    }
-    if (data.retrievers_used && data.retrievers_used.length) {
-        bits.push("Retrievers: " + esc(data.retrievers_used.join(", ")));
-    }
-    $("route").innerHTML = bits.join(" &middot; ");
+    const used = data.retrievers_used || [];
+    $("route").textContent = used.length ? "Retrievers: " + used.join(", ") : "";
 }
 
 function factLine(row) {

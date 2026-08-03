@@ -107,18 +107,12 @@ def render_output(payload: dict, gallery: bool = False) -> None:
     """
     render_answer(payload.get("answer"), payload.get("answer_source"))
 
-    route = payload.get("route")
+    # Only what actually ran. The router's classification is deliberately not
+    # shown beside it: this endpoint runs semantic and full-text regardless of
+    # what the router decided, so the two read as contradicting each other.
     retrievers = payload.get("retrievers_used") or []
-    if route or retrievers:
-        bits = []
-        if route:
-            bits.append(f"Router classified this as **{route['query_type']}** "
-                        f"(via {route['source']})")
-            if route.get("reasoning"):
-                bits.append(route["reasoning"])
-        if retrievers:
-            bits.append(f"Retrievers run: **{', '.join(retrievers)}**")
-        st.caption(" · ".join(bits))
+    if retrievers:
+        st.caption(f"Retrievers run: **{', '.join(retrievers)}**")
 
     results = payload.get("results") or []
     st.markdown(f"**{len(results)} result{'s' if len(results) != 1 else ''}**")
